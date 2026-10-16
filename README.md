@@ -2,7 +2,7 @@
 
 Roman Society is a Citizen of Rome mod that adds a persistent social layer around the vanilla character, dynasty, marriage, property, and pregnancy systems.
 
-Current development version: `1.1.328`.
+Current development version: `1.1.329`.
 
 ## Design Goals
 
@@ -28,7 +28,7 @@ The bundled modules also expose integrated versions of Play As, Attempt Murder, 
 
 ## Roman Systems
 
-Version `1.1.328` integrates the full advanced Society plan as bounded Society systems instead of duplicate vanilla systems.
+Version `1.1.329` integrates the full advanced Society plan as bounded Society systems instead of duplicate vanilla systems.
 
 - Crimes, courts, prison, tax fraud, accusations, pardons, escapes, and legionary sentence alternatives live in the Society hub. Legion sentences reuse vanilla-style military service flags and icons so the character appears as away at war/service instead of using a parallel status.
 - Roman power systems add cursus honorum, clientela, factions, coalitions, dictatorship pressure, imperial laws, spies, hooks, adoption, cognomina, property crises, and monthly technical safety passes.
@@ -174,7 +174,7 @@ The debug snapshot stores its last result in the `corSocietyLastDebugSnapshot` g
 
 The old README had become a mixed feature list and changelog. Starting with `1.1.307`, version notes live in `logs/`.
 
-Latest structured changelog: [logs/1.1.328.md](logs/1.1.328.md).
+Latest structured changelog: [logs/1.1.329.md](logs/1.1.329.md).
 
 See [logs/1.1.307.md](logs/1.1.307.md) for the first structured changelog entry and the corrected historical notes recovered from the previous README.
 

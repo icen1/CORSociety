@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyMonthlyEconomyVersion === '1.1.328') {
+      if (window.corSociety._mixinCorSocietyMonthlyEconomyVersion === '1.1.329') {
         return
       }
       Object.assign(window.corSociety, {
@@ -25,59 +25,86 @@
                   if (society.lastProcessedMonth === monthKey) {
                     return
                   }
+                  // Persist the month marker immediately. If any later step throws, the month is
+                  // still marked as processed, so the whole pass (and its modals) is not replayed
+                  // on every game tick, which used to flood notifications and slow the game down.
                   society.lastProcessedMonth = monthKey
-                  this.syncPlayerWorldEffects(society, state)
-                  this.repairFalsePlayerSlaveFlags(society, state)
-                  this.syncPlayerHouseRecord(society, state)
-                  this.repairDynastyHouseSystem(society, state)
-                  this.maintainDynastyHouseSystem(society, state, { phase: 'monthly-start' })
-                  this.syncExtendedKinVisibility(society, state, { force: true })
-                  this.processBankYear(society, state)
-                  this.simulatePrivateLoans(society, state)
-                  this.processPlayerSlaves(society, state)
-                  this.simulateHouseTurns(society, state)
-                  this.repairIncompleteGeneratedParentPairs(society, state)
-                  if (this.repairFamilyLinkIntegrity) {
-                    this.repairFamilyLinkIntegrity(society, state)
-                    state = daapi.getState()
-                  }
-                  if (this.preparePlayerDynastyTreeOnce && this.preparePlayerDynastyTreeOnce(society, state)) {
-                    state = daapi.getState()
-                  }
-                  this.sustainStrugglingHouses(society, state, { budget: 4 })
-                  state = daapi.getState()
-                  this.retireDeadHouses(society, state, { notify: true })
-                  state = daapi.getState()
-                  this.ensureMinimumHouses(society, state)
-                  state = daapi.getState()
-                  this.maybeCreateNpcCadetHouses(society, state)
-                  this.updateDynastyHeadship(society, state)
-                  this.simulateInterHouseAffairs(society, state)
-                  this.maybeStartNpcRomance(society, state)
-                  this.simulateRomances(society, state)
-                  state = daapi.getState()
-                  this.resolvePendingPaternities(society, state)
-                  this.resolvePendingVentures(society, state)
-                  this.driftRelations(society)
-                  this.resolveTradeCompacts(society, state)
-                  this.applyNetworkModifiers(society)
-                  if (this.simulatePoliticsMonthly) {
-                    this.simulatePoliticsMonthly(society, daapi.getState())
-                    state = daapi.getState()
-                  }
-                  if (this.simulateRomanSystemsMonthly) {
-                    this.simulateRomanSystemsMonthly(society, daapi.getState())
-                    state = daapi.getState()
-                  }
-                  this.maintainDynastyHouseSystem(society, daapi.getState(), { force: true, phase: 'monthly-final', repairCadetBranches: true })
-                  let familyCareQueued = this.queueFamilyCareEvent(society, state)
-                  if (society.settings.monthlyEvents && Math.random() < (familyCareQueued ? 0.32 : 0.64)) {
-                    this.queueMonthlyEvent(society, state)
-                  }
-                  if (this.clearFamilyTreeRuntimeCache) {
-                    this.clearFamilyTreeRuntimeCache()
-                  }
                   this.save(society)
+                  let step = (name, fn) => {
+                    try {
+                      fn()
+                    } catch (err) {
+                      console.warn('Roman Society monthly step failed: ' + name, err)
+                      society.lastMonthlyError = name + ': ' + (err && err.message)
+                    }
+                  }
+                  let refresh = () => {
+                    state = daapi.getState()
+                  }
+                  try {
+                    step('syncPlayerWorldEffects', () => this.syncPlayerWorldEffects(society, state))
+                    step('repairFalsePlayerSlaveFlags', () => this.repairFalsePlayerSlaveFlags(society, state))
+                    step('syncPlayerHouseRecord', () => this.syncPlayerHouseRecord(society, state))
+                    step('repairDynastyHouseSystem', () => this.repairDynastyHouseSystem(society, state))
+                    step('maintainDynastyHouseSystem', () => this.maintainDynastyHouseSystem(society, state, { phase: 'monthly-start' }))
+                    step('syncExtendedKinVisibility', () => this.syncExtendedKinVisibility(society, state, { force: true }))
+                    step('processBankYear', () => this.processBankYear(society, state))
+                    step('simulatePrivateLoans', () => this.simulatePrivateLoans(society, state))
+                    step('processPlayerSlaves', () => this.processPlayerSlaves(society, state))
+                    step('syncOwnedSlavesIntoHousehold', () => this.syncOwnedSlavesIntoHousehold(society, daapi.getState()))
+                    step('simulateHouseTurns', () => this.simulateHouseTurns(society, state))
+                    step('repairIncompleteGeneratedParentPairs', () => this.repairIncompleteGeneratedParentPairs(society, state))
+                    if (this.repairFamilyLinkIntegrity) {
+                      step('repairFamilyLinkIntegrity', () => this.repairFamilyLinkIntegrity(society, state))
+                      refresh()
+                    }
+                    if (this.preparePlayerDynastyTreeOnce) {
+                      step('preparePlayerDynastyTreeOnce', () => this.preparePlayerDynastyTreeOnce(society, state))
+                      refresh()
+                    }
+                    step('sustainStrugglingHouses', () => this.sustainStrugglingHouses(society, state, { budget: 4 }))
+                    refresh()
+                    step('retireDeadHouses', () => this.retireDeadHouses(society, state, { notify: this.extinctionNoticesEnabled(society) }))
+                    refresh()
+                    step('ensureMinimumHouses', () => this.ensureMinimumHouses(society, state))
+                    refresh()
+                    step('maybeCreateNpcCadetHouses', () => this.maybeCreateNpcCadetHouses(society, state))
+                    step('updateDynastyHeadship', () => this.updateDynastyHeadship(society, state))
+                    step('simulateInterHouseAffairs', () => this.simulateInterHouseAffairs(society, state))
+                    step('maybeStartNpcRomance', () => this.maybeStartNpcRomance(society, state))
+                    step('simulateRomances', () => this.simulateRomances(society, state))
+                    refresh()
+                    step('resolvePendingPaternities', () => this.resolvePendingPaternities(society, state))
+                    step('resolvePendingVentures', () => this.resolvePendingVentures(society, state))
+                    step('driftRelations', () => this.driftRelations(society))
+                    step('resolveTradeCompacts', () => this.resolveTradeCompacts(society, state))
+                    step('applyNetworkModifiers', () => this.applyNetworkModifiers(society))
+                    if (this.simulatePoliticsMonthly) {
+                      step('simulatePoliticsMonthly', () => this.simulatePoliticsMonthly(society, daapi.getState()))
+                      refresh()
+                    }
+                    if (this.simulateRomanSystemsMonthly) {
+                      step('simulateRomanSystemsMonthly', () => this.simulateRomanSystemsMonthly(society, daapi.getState()))
+                      refresh()
+                    }
+                    step('maintainDynastyHouseSystem-final', () => this.maintainDynastyHouseSystem(society, daapi.getState(), { force: true, phase: 'monthly-final', repairCadetBranches: true }))
+                    step('monthlyEvents', () => {
+                      let familyCareQueued = this.queueFamilyCareEvent(society, state)
+                      if (society.settings.monthlyEvents && Math.random() < (familyCareQueued ? 0.32 : 0.64)) {
+                        this.queueMonthlyEvent(society, state)
+                      }
+                    })
+                    if (this.clearFamilyTreeRuntimeCache) {
+                      step('clearFamilyTreeRuntimeCache', () => this.clearFamilyTreeRuntimeCache())
+                    }
+                  } finally {
+                    this.save(society)
+                  }
+                },
+        extinctionNoticesEnabled(society) {
+                  // Extinct-house popups are opt-in: they are always written to the Society log and
+                  // the Dead houses archive, but only interrupt play when explicitly enabled.
+                  return !!(society && society.settings && society.settings.extinctionNotices)
                 },
         syncPlayerWorldEffects(society, state) {
                   let current = (state && state.current) || {}
@@ -667,7 +694,7 @@
                   this.normalizeHousePropertyDetails(house)
                 }
       })
-      window.corSociety._mixinCorSocietyMonthlyEconomyVersion = '1.1.328'
+      window.corSociety._mixinCorSocietyMonthlyEconomyVersion = '1.1.329'
     }
   }
 }

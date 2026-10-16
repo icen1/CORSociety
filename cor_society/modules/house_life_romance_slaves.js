@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyHouseLifeRomanceSlavesVersion === '1.1.328') {
+      if (window.corSociety._mixinCorSocietyHouseLifeRomanceSlavesVersion === '1.1.329') {
         return
       }
       Object.assign(window.corSociety, {
@@ -2180,7 +2180,7 @@
                   borrower.relation = this.clamp((borrower.relation || 0) - 24, -100, 100)
                   borrower.heat = (borrower.heat || 0) + 3
                   this.log(society, 'You claim debt bonds from ' + borrower.name + ': ' + names.join(', ') + '.', 'slaves', borrower.id)
-                  this.retireDeadHouses(society, daapi.getState(), { notify: true })
+                  this.retireDeadHouses(society, daapi.getState(), { notify: this.extinctionNoticesEnabled(society) })
                   this.save(society)
                   this.openPrivateLoans()
                 },
@@ -3124,7 +3124,7 @@
                     // works), so we must NOT treat "shares the player's dynasty" / "is in the family
                     // map" as proof that the slave flag is false - otherwise every purchased slave is
                     // wrongly un-enslaved and dropped from playerSlaves on the next ensure()/turn.
-                    let trackedOwnedSlave = !!ownedSlaveIds[String(characterId)] && (character.corSocietySlave === true || character.corSocietyOrigin === 'enslaved_dependant')
+                    let trackedOwnedSlave = !!ownedSlaveIds[String(characterId)]
                     let ownedByOtherHouse = !!ownerHouseId && String(ownerHouseId) !== String(currentDynastyId)
                     let realOwnedSlave = slaveBastard || trackedOwnedSlave || ownedByOtherHouse
                     if (realOwnedSlave) {
@@ -3269,7 +3269,7 @@
                   return 0.08
                 }
       })
-      window.corSociety._mixinCorSocietyHouseLifeRomanceSlavesVersion = '1.1.328'
+      window.corSociety._mixinCorSocietyHouseLifeRomanceSlavesVersion = '1.1.329'
     }
   }
 }

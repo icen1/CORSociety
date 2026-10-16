@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyRosterOverlaysVersion === '1.1.328') {
+      if (window.corSociety._mixinCorSocietyRosterOverlaysVersion === '1.1.329') {
         return
       }
       Object.assign(window.corSociety, {
@@ -519,6 +519,10 @@
                           window.corSociety.applyPortraitOverlays()
                           window.corSociety.applyFamilySocietyButtons()
                           window.corSociety.registerPlayerEntryActions(daapi.getState())
+                          let householdSociety = window.corSociety.load()
+                          if (window.corSociety.syncOwnedSlavesIntoHousehold(householdSociety, daapi.getState())) {
+                            window.corSociety.save(householdSociety)
+                          }
                         }
                       } catch (err) {
                         console.warn(err)
@@ -1074,7 +1078,7 @@
                   return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"')
                 }
       })
-      window.corSociety._mixinCorSocietyRosterOverlaysVersion = '1.1.328'
+      window.corSociety._mixinCorSocietyRosterOverlaysVersion = '1.1.329'
     }
   }
 }

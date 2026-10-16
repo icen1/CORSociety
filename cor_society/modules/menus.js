@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyMenusVersion === '1.1.328') {
+      if (window.corSociety._mixinCorSocietyMenusVersion === '1.1.329') {
         return
       }
       Object.assign(window.corSociety, {
@@ -1294,10 +1294,14 @@
                   let tooltip = kinship.kind === 'spouse' || kinship.kind === 'family'
                     ? 'Special family action. Consequences: improves personal relation and gives a small prestige gain; no formal introduction is used.'
                     : 'Special house/dynasty action. Consequences: improves personal relation and house ties; no formal introduction is used.'
+                  let supportSocial = this.characterSocialRecord(society, character.id, false) || {}
+                  let supportCooling = !!(supportSocial.nextSupportMonth && !this.monthKeyReached(supportSocial.nextSupportMonth, state))
                   return {
                     variant: 'info',
                     text,
-                    tooltip,
+                    disabled: supportCooling,
+                    showDisabledWithTooltip: true,
+                    tooltip: supportCooling ? 'You supported this person recently. Available again after ' + supportSocial.nextSupportMonth + '. ' : tooltip + ' 3 month cooldown per person.',
                     icons: [kinship.icon],
                     action: {
                       event: this.event,
@@ -1474,6 +1478,9 @@
                       },
                       isSelf ? false : {
                         text: 'Praise in public',
+                        disabled: !!(social && social.nextPraiseMonth && !this.monthKeyReached(social.nextPraiseMonth, state)),
+                        showDisabledWithTooltip: true,
+                        tooltip: (social && social.nextPraiseMonth && !this.monthKeyReached(social.nextPraiseMonth, state)) ? 'You praised this person recently. Available again after ' + social.nextPraiseMonth + '.' : 'Praise this person in public: +3 prestige, better relations. 4 month cooldown per person.',
                         icons: [this.affairIcon('prestige')],
                         action: {
                           event: this.event,
@@ -5582,7 +5589,7 @@
                   this.openHouseholdSlaves()
                 }
       })
-      window.corSociety._mixinCorSocietyMenusVersion = '1.1.328'
+      window.corSociety._mixinCorSocietyMenusVersion = '1.1.329'
     }
   }
 }

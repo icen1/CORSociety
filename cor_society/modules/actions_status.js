@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyActionsStatusVersion === '1.1.328') {
+      if (window.corSociety._mixinCorSocietyActionsStatusVersion === '1.1.329') {
         return
       }
       Object.assign(window.corSociety, {
@@ -213,7 +213,48 @@
                       playerHouse.knownMemberIds.push(slaveRecord.characterId)
                     }
                   }
+                  this.syncOwnedSlavesIntoHousehold(society, daapi.getState())
                   return slaveRecord
+                },
+        syncOwnedSlavesIntoHousehold(society, state) {
+                  // The vanilla household list is rebuilt from spouse/children links only, so a
+                  // purchased slave (no blood or marriage link) never shows in the player household.
+                  // Inject owned, living slaves into the live household list and drop the ones we
+                  // injected earlier that are no longer owned (sold, freed, dead).
+                  if (!society || !state || !state.current || !state.characters) {
+                    return 0
+                  }
+                  let current = state.current
+                  current.householdCharacterIds = current.householdCharacterIds || []
+                  let owned = {}
+                  ;(society.playerSlaves || []).forEach((record) => {
+                    let id = record && record.active !== false && record.characterId
+                    let character = id && state.characters[id]
+                    if (character && !character.isDead && !character.hasMovedOut && character.corSocietySlave !== false) {
+                      owned[String(id)] = true
+                    }
+                  })
+                  let changed = 0
+                  Object.keys(owned).forEach((id) => {
+                    if (current.householdCharacterIds.map(String).indexOf(id) < 0) {
+                      current.householdCharacterIds.push(state.characters[id].id || id)
+                      changed += 1
+                    }
+                  })
+                  let injected = (society.householdSlaveInjectedIds || []).filter((id) => {
+                    if (owned[String(id)]) return true
+                    let index = current.householdCharacterIds.map(String).indexOf(String(id))
+                    if (index >= 0) {
+                      current.householdCharacterIds.splice(index, 1)
+                      changed += 1
+                    }
+                    return false
+                  })
+                  Object.keys(owned).forEach((id) => {
+                    if (injected.map(String).indexOf(id) < 0) injected.push(id)
+                  })
+                  society.householdSlaveInjectedIds = injected
+                  return changed
                 },
         enslavedPurchaseInfo(society, state, house, character) {
                   if (!character) return { visible: false, available: false }
@@ -1063,6 +1104,11 @@
                     if (this.sameCharacterId(this.currentCharacterId(state), characterId)) {
                       return
                     }
+                    let praiseSocial = this.characterSocialRecord(society, characterId, true)
+                    if (praiseSocial.nextPraiseMonth && !this.monthKeyReached(praiseSocial.nextPraiseMonth, state)) {
+                      return
+                    }
+                    praiseSocial.nextPraiseMonth = this.futureMonthKey(4)
                     house.relation = this.clamp((house.relation || 0) + 6, -100, 100)
                     this.changePersonalRelation(society, this.currentCharacterId(state), characterId, 8, 'admirer')
                     this.applyStats({ prestige: 3 })
@@ -1083,6 +1129,10 @@
                     let kinship = this.societyKinshipContext ? this.societyKinshipContext(society, state, house, character) : { kind: visitKind || 'family', label: 'Family' }
                     let kind = visitKind || kinship.kind || 'family'
                     let social = this.characterSocialRecord(society, characterId, true)
+                    if (social.nextSupportMonth && !this.monthKeyReached(social.nextSupportMonth, state)) {
+                      return
+                    }
+                    social.nextSupportMonth = this.futureMonthKey(3)
                     let relationGain = kind === 'spouse' ? 12 : kind === 'family' ? 9 : kind === 'house' ? 7 : 5
                     let houseGain = kind === 'spouse' ? 1 : kind === 'family' ? 2 : kind === 'house' ? 5 : 4
                     social.introduced = true
@@ -2445,7 +2495,7 @@
                   return !!character.isMale
                 }
       })
-      window.corSociety._mixinCorSocietyActionsStatusVersion = '1.1.328'
+      window.corSociety._mixinCorSocietyActionsStatusVersion = '1.1.329'
     }
   }
 }

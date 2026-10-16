@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyRomanSystemsVersion === '1.1.328') {
+      if (window.corSociety._mixinCorSocietyRomanSystemsVersion === '1.1.329') {
         return
       }
       let previousPoliticsAction = window.corSociety.politicsAction
@@ -2267,7 +2267,7 @@
           this.refreshPropertyMarket(society, state)
         }
       })
-      window.corSociety._mixinCorSocietyRomanSystemsVersion = '1.1.328'
+      window.corSociety._mixinCorSocietyRomanSystemsVersion = '1.1.329'
     }
   }
 }
