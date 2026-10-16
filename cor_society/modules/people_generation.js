@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyPeopleGenerationVersion === '1.1.329') {
+      if (window.corSociety._mixinCorSocietyPeopleGenerationVersion === '1.1.330') {
         return
       }
       Object.assign(window.corSociety, {
@@ -1497,7 +1497,10 @@
                       let partner = state.characters[character.spouseId]
                       // Non-mutual spouse link: the partner does not point back. Clear ONLY our side
                       // (the fake claim 1.1.322 may have written). Never edit the partner.
-                      if (partner && String(partner.spouseId || '') !== String(id)) {
+                      // Never sever a link that touches the player's own living family: a transient
+                      // mismatch there would drop the spouse from the household on the next tick.
+                      let partnerIsPlayerFamily = !!(state.current && (state.current.householdCharacterIds || []).some((hid) => this.sameCharacterId(hid, character.spouseId) || this.sameCharacterId(hid, id)))
+                      if (partner && String(partner.spouseId || '') !== String(id) && !partnerIsPlayerFamily) {
                         patch.spouseId = null
                       }
                     }
@@ -1980,7 +1983,7 @@
                   return counts
                 }
       })
-      window.corSociety._mixinCorSocietyPeopleGenerationVersion = '1.1.329'
+      window.corSociety._mixinCorSocietyPeopleGenerationVersion = '1.1.330'
     }
   }
 }

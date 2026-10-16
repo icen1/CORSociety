@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyHouseLifeRomanceSlavesVersion === '1.1.329') {
+      if (window.corSociety._mixinCorSocietyHouseLifeRomanceSlavesVersion === '1.1.330') {
         return
       }
       Object.assign(window.corSociety, {
@@ -2784,6 +2784,32 @@
                   })
                   return counts
                 },
+        houseHasLivingPeopleRaw(state, house) {
+                  // Direct scan of the game characters, independent of the Society member lists.
+                  // The lists can lag or be mis-resolved, which used to make a house with living
+                  // members look empty and get archived as extinct (its family "vanished").
+                  if (!state || !state.characters || !house || !house.id) {
+                    return false
+                  }
+                  let houseId = String(house.id)
+                  let gameId = String(this.gameDynastyIdForHouse ? this.gameDynastyIdForHouse(house) : house.id)
+                  let playerDynastyId = String(this.currentCharacterDynastyId(state) || '')
+                  if (playerDynastyId && (playerDynastyId === houseId || playerDynastyId === gameId)) {
+                    return true
+                  }
+                  let ids = Object.keys(state.characters)
+                  for (let i = 0; i < ids.length; i++) {
+                    let character = state.characters[ids[i]]
+                    if (!character || character.isDead || character.corSocietyGhostParent || character.corSocietySlave === true) {
+                      continue
+                    }
+                    let taggedHouse = character.corSocietyHouseId ? String(character.corSocietyHouseId) : ''
+                    if (taggedHouse ? taggedHouse === houseId : String(character.dynastyId || '') === gameId) {
+                      return true
+                    }
+                  }
+                  return false
+                },
         shouldRetireHouse(society, state, house) {
                   if (!society || !state || !house || !house.id) {
                     return false
@@ -2791,7 +2817,10 @@
                   if (String(house.id) === String(this.currentCharacterDynastyId(state))) {
                     return false
                   }
-                  return this.houseLivingMemberIds(society, state, house).length <= 0
+                  if (this.houseLivingMemberIds(society, state, house).length > 0) {
+                    return false
+                  }
+                  return !this.houseHasLivingPeopleRaw(state, house)
                 },
         retireDeadHouses(society, state, options) {
                   if (!society || !society.houses || !state || !state.characters) {
@@ -2833,6 +2862,9 @@
                     return false
                   }
                   options = options || {}
+                  if (this.houseHasLivingPeopleRaw(state, house)) {
+                    return false
+                  }
                   society.deadHouses = society.deadHouses || {}
                   society.deadHouseIds = society.deadHouseIds || []
                   let deadMemberIds = this.houseKnownMemberIds(society, state, house)
@@ -3269,7 +3301,7 @@
                   return 0.08
                 }
       })
-      window.corSociety._mixinCorSocietyHouseLifeRomanceSlavesVersion = '1.1.329'
+      window.corSociety._mixinCorSocietyHouseLifeRomanceSlavesVersion = '1.1.330'
     }
   }
 }
