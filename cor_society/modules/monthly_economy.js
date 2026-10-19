@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyMonthlyEconomyVersion === '1.1.330') {
+      if (window.corSociety._mixinCorSocietyMonthlyEconomyVersion === '1.1.331') {
         return
       }
       Object.assign(window.corSociety, {
@@ -42,6 +42,8 @@
                     state = daapi.getState()
                   }
                   try {
+                    step('repairPlayerFamilyHouseAssignment', () => this.repairPlayerFamilyHouseAssignment(society, state))
+                    refresh()
                     step('syncPlayerWorldEffects', () => this.syncPlayerWorldEffects(society, state))
                     step('repairFalsePlayerSlaveFlags', () => this.repairFalsePlayerSlaveFlags(society, state))
                     step('syncPlayerHouseRecord', () => this.syncPlayerHouseRecord(society, state))
@@ -294,6 +296,9 @@
                   for (let dynastyId in society.dynasties) {
                     if (!society.dynasties.hasOwnProperty(dynastyId)) continue
                     let dynasty = society.dynasties[dynastyId]
+                    // The player's own dynasty is never split by the AI: an NPC cadet foundation
+                    // used to pull the player's family (even the player) into an AI-run house.
+                    if (String(dynastyId) === String(this.currentCharacterDynastyId(state))) continue
                     let originHouse = this.primaryHouseForDynasty(society, dynastyId)
                     if (!originHouse || originHouse.stratum === 'poor') continue
                     let houses = this.housesForDynasty(society, dynastyId)
@@ -694,7 +699,7 @@
                   this.normalizeHousePropertyDetails(house)
                 }
       })
-      window.corSociety._mixinCorSocietyMonthlyEconomyVersion = '1.1.330'
+      window.corSociety._mixinCorSocietyMonthlyEconomyVersion = '1.1.331'
     }
   }
 }

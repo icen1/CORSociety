@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyDynastyModelVersion === '1.1.330') {
+      if (window.corSociety._mixinCorSocietyDynastyModelVersion === '1.1.331') {
         return
       }
       Object.assign(window.corSociety, {
@@ -762,6 +762,9 @@
                   if (!society || !state || !dynastyId || !founder) {
                     return false
                   }
+                  if (reason !== 'player branch foundation' && String(dynastyId) === String(this.currentCharacterDynastyId(state))) {
+                    return false
+                  }
                   let dynasty = society.dynasties[dynastyId] || {}
                   let originHouse = this.primaryHouseForDynasty(society, dynastyId)
                   if (!originHouse) {
@@ -945,6 +948,69 @@
                   }
                   this.syncPlayerHouseRecord(society, state)
                 },
+        isNpcCadetOfPlayerDynasty(society, state, house) {
+                  let playerHouseId = this.currentCharacterDynastyId(state)
+                  return !!(house && playerHouseId && !house.isPlayerHouse && String(house.id) !== String(playerHouseId) &&
+                    (house.cadetHouse || house.houseKind === 'cadet') && house.foundedReason !== 'player branch foundation' &&
+                    String(this.gameDynastyIdForHouse(house)) === String(playerHouseId))
+                },
+        repairPlayerFamilyHouseAssignment(society, state) {
+                  // Repairs saves where an NPC cadet foundation absorbed the player's family into an
+                  // AI-controlled house: everyone is moved back to the protected player household,
+                  // dead people are dropped from active lists, and the AI cadet is dissolved.
+                  if (!society || !state || !state.characters || !society.houses) {
+                    return 0
+                  }
+                  let playerHouseId = this.currentCharacterDynastyId(state)
+                  if (!playerHouseId) {
+                    return 0
+                  }
+                  let repaired = 0
+                  let cadetIds = Object.keys(society.houses).filter((houseId) => this.isNpcCadetOfPlayerDynasty(society, state, society.houses[houseId]))
+                  if (cadetIds.length) {
+                    let cadetMap = this.idSet(cadetIds)
+                    Object.keys(state.characters).forEach((characterId) => {
+                      let character = state.characters[characterId]
+                      if (!character || String(character.dynastyId || '') !== String(playerHouseId)) {
+                        return
+                      }
+                      if (character.corSocietyHouseId && cadetMap[String(character.corSocietyHouseId)]) {
+                        if (this.repairCharacterHousePointer(state, characterId, playerHouseId)) {
+                          repaired += 1
+                        }
+                      }
+                    })
+                    let dynasty = society.dynasties && society.dynasties[playerHouseId]
+                    cadetIds.forEach((houseId) => {
+                      let house = society.houses[houseId]
+                      delete society.houses[houseId]
+                      society.generatedHouseIds = (society.generatedHouseIds || []).filter((id) => String(id) !== String(houseId))
+                      if (dynasty) {
+                        dynasty.houseIds = (dynasty.houseIds || []).filter((id) => String(id) !== String(houseId))
+                        if (String(dynasty.headHouseId || '') === String(houseId)) dynasty.headHouseId = playerHouseId
+                      }
+                      this.log(society, (house && house.name || 'An AI cadet house') + ' is dissolved: your family stays in the protected player household.', 'familyTree', playerHouseId)
+                    })
+                  }
+                  Object.keys(society.houses).forEach((houseId) => {
+                    let house = society.houses[houseId]
+                    if (!house) return
+                    let isDead = (id) => {
+                      let character = state.characters[id]
+                      return !!(character && character.isDead)
+                    }
+                    ;['memberIds', 'notableIds', 'knownMemberIds', 'slaveIds'].forEach((key) => {
+                      if (!house[key] || !house[key].some(isDead)) return
+                      house.deadMemberIds = this.uniqueIds((house.deadMemberIds || []).concat(house[key].filter(isDead)))
+                      house[key] = house[key].filter((id) => !isDead(id))
+                      repaired += 1
+                    })
+                  })
+                  if (repaired && this.clearFamilyTreeRuntimeCache) {
+                    this.clearFamilyTreeRuntimeCache()
+                  }
+                  return repaired
+                },
         syncPlayerHouseRecord(society, state) {
                   if (!society || !state || !state.characters) {
                     return false
@@ -953,6 +1019,7 @@
                   if (!playerHouseId) {
                     return false
                   }
+                  this.repairPlayerFamilyHouseAssignment(society, state)
                   let currentId = this.currentCharacterId(state)
                   let player = state.characters[currentId] || {}
                   let dynasty = (state.dynasties && state.dynasties[playerHouseId]) || {}
@@ -1173,7 +1240,7 @@
                   }
                 }
       })
-      window.corSociety._mixinCorSocietyDynastyModelVersion = '1.1.330'
+      window.corSociety._mixinCorSocietyDynastyModelVersion = '1.1.331'
     }
   }
 }

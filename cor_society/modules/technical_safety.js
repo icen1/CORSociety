@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyTechnicalSafetyVersion === '1.1.330') {
+      if (window.corSociety._mixinCorSocietyTechnicalSafetyVersion === '1.1.331') {
         return
       }
       let previousDebugSnapshot = window.corSociety.debugSnapshot
@@ -306,7 +306,7 @@
           return options
         }
       })
-      window.corSociety._mixinCorSocietyTechnicalSafetyVersion = '1.1.330'
+      window.corSociety._mixinCorSocietyTechnicalSafetyVersion = '1.1.331'
     }
   }
 }

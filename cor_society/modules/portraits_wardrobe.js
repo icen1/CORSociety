@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyPortraitsWardrobeVersion === '1.1.330') {
+      if (window.corSociety._mixinCorSocietyPortraitsWardrobeVersion === '1.1.331') {
         return
       }
       Object.assign(window.corSociety, {
@@ -945,7 +945,7 @@
                   return list[Math.floor(random() * list.length) % list.length]
                 }
       })
-      window.corSociety._mixinCorSocietyPortraitsWardrobeVersion = '1.1.330'
+      window.corSociety._mixinCorSocietyPortraitsWardrobeVersion = '1.1.331'
     }
   }
 }

@@ -7,7 +7,7 @@
       if (!window.corSociety) {
         return
       }
-      if (window.corSociety._mixinCorSocietyConfigVersion === '1.1.330') {
+      if (window.corSociety._mixinCorSocietyConfigVersion === '1.1.331') {
         return
       }
       Object.assign(window.corSociety, {
@@ -217,7 +217,7 @@
         romanRegions: ['Latium', 'Campania', 'Etruria', 'Umbria', 'Samnium', 'Apulia', 'Picenum', 'Sicilia', 'Sardinia', 'Hispania', 'Gallia Cisalpina', 'Africa', 'Achaea', 'Asia'],
         romanEstateLocations: ['an estate on the Palatine', 'a townhouse in the Subura', 'a warehouse by the Emporium docks', 'a workshop along the Argiletum', 'a villa in Campania', 'farmland in Latium', 'an insula near the Forum Boarium', 'orchards on the Caelian', 'vineyards in Etruria', 'a granary at Ostia', 'a tannery in Trans Tiberim', 'a horrea on the Aventine']
       })
-      window.corSociety._mixinCorSocietyConfigVersion = '1.1.330'
+      window.corSociety._mixinCorSocietyConfigVersion = '1.1.331'
     }
   }
 }
