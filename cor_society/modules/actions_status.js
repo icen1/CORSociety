@@ -2061,7 +2061,9 @@
                   if (!society || !society.houses) return []
                   let month = society.lastProcessedMonth || society.lastProcessedStatusMonth || ''
                   let houseCount = Object.keys(society.houses).length
-                  if (this._sortedHousesCache && this._sortedHousesCache.month === month && this._sortedHousesCache.count === houseCount) {
+                  // Also keyed on the society object: after reloading a same-month save, month and count
+                  // match but the house objects are the reloaded save's.
+                  if (this._sortedHousesCache && this._sortedHousesCache.society === society && this._sortedHousesCache.month === month && this._sortedHousesCache.count === houseCount) {
                     return this._sortedHousesCache.list
                   }
                   let houses = []
@@ -2076,7 +2078,7 @@
                     }
                     return String(a.name || '').localeCompare(String(b.name || ''))
                   })
-                  this._sortedHousesCache = { month, count: houseCount, list }
+                  this._sortedHousesCache = { society, month, count: houseCount, list }
                   return list
                 },
         alliedHouses(society) {
