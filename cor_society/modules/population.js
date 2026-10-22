@@ -20,6 +20,34 @@
       // (trees and houses need them); only dead generated ones that no tree of the player's family
       // starts from are left out of the list. Disable with window.corSocietyDisablePopulationTrim = true.
       Object.assign(window.corSociety, {
+        livingGeneratedCount(society, state) {
+          // How many generated people are alive, for the generation budgets (140/180/260/320/420).
+          // society.generatedCharacterIds is only a window of the last 420 ids, dead and ghost parents
+          // included: compared with the budgets, a mature save stayed at 420 and never generated
+          // anyone again, and houses aged out to extinction. Counts
+          // the flag over all records (living people fall out of the window), cached per state copy,
+          // plus window ids generated since that count (missing from the copy, or mirrored into it).
+          state = state || daapi.getState()
+          let characters = (state && state.characters) || {}
+          let ids = (society && society.generatedCharacterIds) || []
+          this._livingGeneratedCache = this._livingGeneratedCache || new WeakMap()
+          let entry = this._livingGeneratedCache.get(characters)
+          if (!entry) {
+            entry = { base: 0, seen: new Set() }
+            Object.keys(characters).forEach((id) => {
+              let character = characters[id]
+              if (character && character.corSocietyGenerated && !character.isDead) {
+                entry.base += 1
+              }
+            })
+            ids.forEach((id) => {
+              if (characters[id]) entry.seen.add(String(id))
+            })
+            this._livingGeneratedCache.set(characters, entry)
+          }
+          let pending = ids.filter((id) => !entry.seen.has(String(id)) && !(characters[id] && characters[id].isDead)).length
+          return entry.base + pending
+        },
         isPopulationTrimCandidate(character) {
           return !!(character && character.isDead && (character.corSocietyGenerated || character.corSocietyGhostParent || character.corSocietyGeneratedConnector))
         },

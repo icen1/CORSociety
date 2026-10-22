@@ -166,7 +166,7 @@
                       }
                     }
                   }
-                  while (this.visibleHousePeople(house, state).length < this.minimumVisibleMembers(house) && (society.generatedCharacterIds || []).length < 260) {
+                  while (this.visibleHousePeople(house, state).length < this.minimumVisibleMembers(house) && this.livingGeneratedCount(society, state) < 260) {
                     this.generateRelative(society, state, house, stratum, head)
                     state = daapi.getState()
                     head = state.characters[headId] || head
@@ -1010,7 +1010,7 @@
                       this.sameCharacterId(character.motherId, rootMotherId)
                   })
                   let livingAdded = 0
-                  if (!siblingIds.length && options.allowLivingExtras && (society.generatedCharacterIds || []).length < 320) {
+                  if (!siblingIds.length && options.allowLivingExtras && this.livingGeneratedCount(society, state) < 320) {
                     let siblingId = this.generateHouseSibling(society, state, house, house.stratum || 'plebeian', root)
                     if (siblingId) {
                       livingAdded += 1

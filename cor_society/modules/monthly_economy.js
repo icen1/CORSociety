@@ -323,7 +323,7 @@
                       if (Math.random() < 0.10) {
                         event = 'marriageAlliance'
                         house.power += 3
-                        if ((house.memberIds || []).length < 8 && society.generatedCharacterIds.length < 140) {
+                        if ((house.memberIds || []).length < 8 && this.livingGeneratedCount(society, state) < 140) {
                           this.generateHouseMember(society, state, house)
                         }
                       }

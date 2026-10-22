@@ -3929,7 +3929,7 @@
                     return
                   }
                   let candidates = this.houseMarriageCandidates(house, state, playerCharacter)
-                  if (!candidates.length && (society.generatedCharacterIds || []).length < 180) {
+                  if (!candidates.length && this.livingGeneratedCount(society, state) < 180) {
                     let prospectId = this.generateMarriageProspect(society, state, house, playerCharacter)
                     if (!prospectId) {
                       candidates = []
