@@ -497,46 +497,51 @@
                   return character ? this.characterPortrait(character, state, house) : this.affairIcon('log')
                 },
         startPlayerStatusOverlay() {
-                  if (this.playerStatusOverlayStarted) {
-                    this.applyPlayerStatusOverlay()
-                    this.applyPortraitOverlays()
-                    this.applyFamilySocietyButtons()
-                    this.registerPlayerEntryActions(daapi.getState())
-                    this.clearRelationBadges()
-                    return
-                  }
-                  this.playerStatusOverlayStarted = true
-                  this.applyPlayerStatusOverlay()
-                  this.applyPortraitOverlays()
-                  this.applyFamilySocietyButtons()
-                  this.registerPlayerEntryActions(daapi.getState())
-                  this.clearRelationBadges()
-                  if (typeof window !== 'undefined' && window.setInterval) {
-                    window.setInterval(() => {
-                      try {
-                        if (window.corSociety && window.corSociety.daapiReady && window.corSociety.daapiReady()) {
-                          window.corSociety.applyPlayerStatusOverlay()
-                          window.corSociety.applyPortraitOverlays()
-                          window.corSociety.applyFamilySocietyButtons()
-                          // Owned-slave household sync is not run here: it edits a getState() copy, so it
-                          // cannot reach the game. The monthly tick still runs it.
-                          window.corSociety.registerPlayerEntryActions(daapi.getState())
+                  if (!this.playerStatusOverlayStarted) {
+                    this.playerStatusOverlayStarted = true
+                    if (typeof window !== 'undefined' && window.setInterval) {
+                      window.setInterval(() => {
+                        try {
+                          if (window.corSociety && window.corSociety.daapiReady && window.corSociety.daapiReady()) {
+                            window.corSociety.runPlayerOverlayTick()
+                          }
+                        } catch (err) {
+                          console.warn(err)
                         }
-                      } catch (err) {
-                        console.warn(err)
-                      }
-                    }, 4200)
+                      }, 4200)
+                    }
                   }
+                  let state = daapi.getState()
+                  this.applyPlayerStatusOverlay(state)
+                  this.applyPortraitOverlays(state)
+                  this.applyFamilySocietyButtons()
+                  this.registerPlayerEntryActions(state)
+                  this.clearRelationBadges()
                 },
-        applyPlayerStatusOverlay() {
-                  if (typeof document === 'undefined') {
+        runPlayerOverlayTick() {
+                  // daapi.getState() deep-copies the whole game state, so each tick takes one snapshot
+                  // and shares it; every step below only reads it. The player crest is refreshed here
+                  // too instead of on its own interval. Owned-slave household sync is not run here:
+                  // it edits a getState() copy, so it cannot reach the game.
+                  if (typeof document === 'undefined' || document.hidden) {
                     return
                   }
                   let state = daapi.getState()
+                  this.applyPlayerStatusOverlay(state)
+                  this.applyPortraitOverlays(state)
+                  this.applyFamilySocietyButtons()
+                  this.registerPlayerEntryActions(state)
+                  this.applyPlayerCrestOverlay(state)
+                },
+        applyPlayerStatusOverlay(state) {
+                  if (typeof document === 'undefined') {
+                    return
+                  }
                   let target = this.findPlayerStatusElement()
                   if (!target) {
                     return
                   }
+                  state = state || daapi.getState()
                   let key = this.playerStatusKey(state)
                   if (target.getAttribute('data-cor-society-status-key') === key) {
                     return
@@ -567,11 +572,11 @@
                   }
                   return false
                 },
-        applyPortraitOverlays() {
+        applyPortraitOverlays(state) {
                   if (typeof document === 'undefined') {
                     return
                   }
-                  let state = daapi.getState()
+                  state = state || daapi.getState()
                   if (!state || !state.characters) {
                     return
                   }
@@ -949,30 +954,21 @@
                   img.src = portrait
                 },
         startPlayerCrestOverlay() {
-                  if (this.playerCrestOverlayStarted) {
-                    this.applyPlayerCrestOverlay()
-                    return
-                  }
+                  // Refreshed by runPlayerOverlayTick with the tick's shared state snapshot.
                   this.playerCrestOverlayStarted = true
                   this.applyPlayerCrestOverlay()
-                  if (typeof window !== 'undefined' && window.setInterval) {
-                    window.setInterval(() => {
-                      try {
-                        if (window.corSociety && window.corSociety.daapiReady && window.corSociety.daapiReady()) {
-                          window.corSociety.applyPlayerCrestOverlay()
-                        }
-                      } catch (err) {
-                        console.warn(err)
-                      }
-                    }, 4500)
-                  }
                 },
-        applyPlayerCrestOverlay() {
+        applyPlayerCrestOverlay(state) {
                   if (typeof document === 'undefined') {
                     return
                   }
-                  let state = daapi.getState()
-                  let society = this.load()
+                  state = state || daapi.getState()
+                  // getGlobalFlag returns the live Society object by reference; load() would add another
+                  // full getState() copy plus the migration/prune pass on every tick.
+                  let society = daapi.getGlobalFlag({ flag: this.flag })
+                  if (!society || typeof society !== 'object' || !society.crests) {
+                    society = this.load()
+                  }
                   society.crestSettings = { playerOverlay: true, ...(society.crestSettings || {}) }
                   if (!society.crestSettings.playerOverlay) {
                     this.clearPlayerCrestOverlay()
@@ -995,7 +991,13 @@
                   }
                   let viewportWidth = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : 360
                   let size = Math.max(26, Math.min(38, Math.round(viewportWidth * 0.09)))
-                  badge.src = this.crestIcon(crest, 96)
+                  let crestKey = JSON.stringify(crest || {})
+                  if (!this._playerCrestBadge || this._playerCrestBadge.key !== crestKey) {
+                    this._playerCrestBadge = { key: crestKey, src: this.crestIcon(crest, 96) }
+                  }
+                  if (badge.getAttribute('src') !== this._playerCrestBadge.src) {
+                    badge.src = this._playerCrestBadge.src
+                  }
                   badge.style.left = '6px'
                   badge.style.top = '6px'
                   badge.style.width = size + 'px'
