@@ -518,11 +518,9 @@
                           window.corSociety.applyPlayerStatusOverlay()
                           window.corSociety.applyPortraitOverlays()
                           window.corSociety.applyFamilySocietyButtons()
+                          // Owned-slave household sync is not run here: it edits a getState() copy, so it
+                          // cannot reach the game. The monthly tick still runs it.
                           window.corSociety.registerPlayerEntryActions(daapi.getState())
-                          let householdSociety = window.corSociety.load()
-                          if (window.corSociety.syncOwnedSlavesIntoHousehold(householdSociety, daapi.getState())) {
-                            window.corSociety.save(householdSociety)
-                          }
                         }
                       } catch (err) {
                         console.warn(err)
