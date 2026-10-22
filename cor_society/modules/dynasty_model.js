@@ -273,7 +273,9 @@
                     }
                     let validHead = record.headHouseId && society.houses[record.headHouseId] && String(this.gameDynastyIdForHouse(society.houses[record.headHouseId])) === String(dynastyId)
                     if (!validHead) {
-                      let head = houses.slice().sort((a, b) => this.houseHeadshipScore(b) - this.houseHeadshipScore(a))[0] || origin
+                      let playerHouseId = this.currentCharacterDynastyId(state)
+                      let head = (playerHouseId && String(dynastyId) === String(playerHouseId) && society.houses[playerHouseId]) ||
+                        houses.slice().sort((a, b) => this.houseHeadshipScore(b) - this.houseHeadshipScore(a))[0] || origin
                       if (head && record.headHouseId !== head.id) {
                         record.headHouseId = head.id
                         changed = true
@@ -317,9 +319,15 @@
                   if (!dynastyId) {
                     return false
                   }
+                  // An NPC cadet house never takes back the people the player keeps, even when they
+                  // married into its founder's line (playerKeptIdMap); player-founded branches do.
+                  let kept = !house.originHouse && house.foundedReason !== 'player branch foundation' ? this.playerKeptIdMap(state) : null
                   let assignToHouse = (characterId) => {
                     let character = state.characters[characterId]
                     if (!character || character.isDead || character.corSocietySlave || character.corSocietySlaveActive) {
+                      return
+                    }
+                    if (kept && kept[String(characterId)]) {
                       return
                     }
                     if (!character.dynastyId || String(character.dynastyId) !== String(dynastyId)) {
@@ -739,7 +747,7 @@
                     influence: [5, 8, 14, 24, 42, 75][level] || 14
                   }
                 },
-        cadetFounderCandidate(society, state, dynastyId, playerOnly) {
+        cadetFounderCandidate(society, state, dynastyId, playerOnly, excludedIds) {
                   let currentId = this.currentCharacterId(state)
                   let ids = playerOnly ? this.playerFamilyMemberIds(state) : this.memberIdsForDynasty(society, state, dynastyId)
                   let originHouse = this.primaryHouseForDynasty(society, dynastyId)
@@ -749,6 +757,7 @@
                     return character
                   }).filter((character) => {
                     if (!character || character.isDead || character.corSocietySlave || character.corSocietySlaveActive) return false
+                    if (excludedIds && excludedIds[String(character.id)]) return false
                     if (!character.dynastyId || String(character.dynastyId) !== String(dynastyId)) return false
                     let houseId = this.resolveCharacterHouseId(character, state, society, { repair: false })
                     if (originHouse && houseId && String(houseId) !== String(originHouse.id)) return false
@@ -762,7 +771,11 @@
                   if (!society || !state || !dynastyId || !founder) {
                     return false
                   }
-                  if (reason !== 'player branch foundation' && String(dynastyId) === String(this.currentCharacterDynastyId(state))) {
+                  // An NPC-founded branch never takes the player, their line, ancestors or household
+                  // (playerKeptIdMap): in the player's dynasty only a sibling's or cousin's line can
+                  // split off. Branches the player founds are not restricted.
+                  let excludedIds = reason !== 'player branch foundation' ? this.playerKeptIdMap(state) : null
+                  if (excludedIds && excludedIds[String(founder.id)]) {
                     return false
                   }
                   let dynasty = society.dynasties[dynastyId] || {}
@@ -803,6 +816,9 @@
                   house.notableIds = []
                   society.houses[houseId] = house
                   let moveIds = this.cadetBranchMemberIds(state, founder)
+                  if (excludedIds) {
+                    moveIds = moveIds.filter((characterId) => !excludedIds[String(characterId)])
+                  }
                   moveIds.forEach((characterId) => {
                     try {
                       daapi.updateCharacter({ characterId, character: { corSocietyHouseId: houseId, dynastyId } })
@@ -867,10 +883,21 @@
         updateDynastyHeadship(society, state) {
                   society = society || this.load()
                   let changed = false
-                  this.normalizeDynastyHouseModel(society, state || daapi.getState())
+                  state = state || daapi.getState()
+                  this.normalizeDynastyHouseModel(society, state)
+                  let playerHouseId = this.currentCharacterDynastyId(state)
                   for (let dynastyId in society.dynasties) {
                     if (!society.dynasties.hasOwnProperty(dynastyId)) continue
                     let dynasty = society.dynasties[dynastyId]
+                    if (playerHouseId && String(dynastyId) === String(playerHouseId)) {
+                      // The player's house always heads the player's own dynasty; a relative's cadet
+                      // house never takes it over.
+                      if (society.houses[playerHouseId] && String(dynasty.headHouseId || '') !== String(playerHouseId)) {
+                        dynasty.headHouseId = playerHouseId
+                        changed = true
+                      }
+                      continue
+                    }
                     let houses = this.housesForDynasty(society, dynastyId)
                     if (houses.length < 2) continue
                     let currentHead = society.houses[dynasty.headHouseId] || this.primaryHouseForDynasty(society, dynastyId)
@@ -956,8 +983,10 @@
                 },
         repairPlayerFamilyHouseAssignment(society, state) {
                   // Repairs saves where an NPC cadet foundation absorbed the player's family into an
-                  // AI-controlled house: everyone is moved back to the protected player household,
-                  // dead people are dropped from active lists, and the AI cadet is dissolved.
+                  // AI-controlled house. A cadet founded by someone the player keeps (their line,
+                  // ancestors or household, see playerKeptIdMap) is dissolved and everyone in it
+                  // moves back to the player household; a sibling's or cousin's cadet stays, and only
+                  // the people the player keeps move back. Dead people are dropped from active lists.
                   if (!society || !state || !state.characters || !society.houses) {
                     return 0
                   }
@@ -968,20 +997,27 @@
                   let repaired = 0
                   let cadetIds = Object.keys(society.houses).filter((houseId) => this.isNpcCadetOfPlayerDynasty(society, state, society.houses[houseId]))
                   if (cadetIds.length) {
+                    let kept = this.playerKeptIdMap(state)
                     let cadetMap = this.idSet(cadetIds)
+                    let dissolveIds = cadetIds.filter((houseId) => {
+                      let founderId = society.houses[houseId].founderId
+                      return !founderId || kept[String(founderId)]
+                    })
+                    let dissolveMap = this.idSet(dissolveIds)
                     Object.keys(state.characters).forEach((characterId) => {
                       let character = state.characters[characterId]
                       if (!character || String(character.dynastyId || '') !== String(playerHouseId)) {
                         return
                       }
-                      if (character.corSocietyHouseId && cadetMap[String(character.corSocietyHouseId)]) {
+                      let houseId = character.corSocietyHouseId && String(character.corSocietyHouseId)
+                      if (houseId && cadetMap[houseId] && (dissolveMap[houseId] || kept[String(characterId)])) {
                         if (this.repairCharacterHousePointer(state, characterId, playerHouseId)) {
                           repaired += 1
                         }
                       }
                     })
                     let dynasty = society.dynasties && society.dynasties[playerHouseId]
-                    cadetIds.forEach((houseId) => {
+                    dissolveIds.forEach((houseId) => {
                       let house = society.houses[houseId]
                       delete society.houses[houseId]
                       society.generatedHouseIds = (society.generatedHouseIds || []).filter((id) => String(id) !== String(houseId))

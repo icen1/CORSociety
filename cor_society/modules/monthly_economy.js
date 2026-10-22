@@ -293,12 +293,10 @@
                     return false
                   }
                   let created = false
+                  let excludedIds = this.playerKeptIdMap(state)
                   for (let dynastyId in society.dynasties) {
                     if (!society.dynasties.hasOwnProperty(dynastyId)) continue
                     let dynasty = society.dynasties[dynastyId]
-                    // The player's own dynasty is never split by the AI: an NPC cadet foundation
-                    // used to pull the player's family (even the player) into an AI-run house.
-                    if (String(dynastyId) === String(this.currentCharacterDynastyId(state))) continue
                     let originHouse = this.primaryHouseForDynasty(society, dynastyId)
                     if (!originHouse || originHouse.stratum === 'poor') continue
                     let houses = this.housesForDynasty(society, dynastyId)
@@ -308,7 +306,9 @@
                     let threshold = originHouse.stratum === 'senatorial' ? 180 : originHouse.stratum === 'equestrian' ? 135 : originHouse.stratum === 'civic' ? 95 : 70
                     let chance = originHouse.stratum === 'senatorial' ? 0.018 : originHouse.stratum === 'equestrian' ? 0.014 : 0.008
                     if (score < threshold || Math.random() >= chance) continue
-                    let founder = this.cadetFounderCandidate(society, state, dynastyId, false)
+                    // The player, their line, ancestors and household never found or join an NPC
+                    // cadet house; a sibling's or cousin's line may.
+                    let founder = this.cadetFounderCandidate(society, state, dynastyId, false, excludedIds)
                     if (!founder) continue
                     if (this.createCadetHouse(society, state, dynastyId, founder, 'npc cadet foundation')) {
                       created = true
