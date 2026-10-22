@@ -2467,13 +2467,18 @@
         npcEnslavedCandidates(society, state, buyerHouse) {
                   let candidates = []
                   let buyerHouseId = buyerHouse ? buyerHouse.id : false
+                  // NPC houses never buy the player's people: nobody from the player's house, even
+                  // when it falls to the poor order, and nobody the player keeps (playerKeptIdMap)
+                  // wherever they live.
+                  let playerHouseId = this.currentCharacterDynastyId(state)
+                  let kept = this.playerKeptIdMap(state)
                   this.sortedHouses(society).forEach((house) => {
-                    if (!house || house.id === buyerHouseId || house.stratum !== 'poor') {
+                    if (!house || house.id === buyerHouseId || house.stratum !== 'poor' || house.isPlayerHouse || String(house.id) === String(playerHouseId)) {
                       return
                     }
                     this.visibleHousePeople(house, state).forEach((characterId) => {
                       let character = state.characters && state.characters[characterId]
-                      if (!character || character.isDead || character.corSocietySlaveActive === true || this.age(character, state) < 5) {
+                      if (!character || character.isDead || character.corSocietySlaveActive === true || this.age(character, state) < 5 || kept[String(characterId)]) {
                         return
                       }
                       character.id = character.id || characterId
@@ -2487,6 +2492,9 @@
                 },
         npcPurchaseEnslavedCharacter(society, state, buyerHouse, item) {
                   if (!buyerHouse || !item || !item.character || !item.sellerHouse) {
+                    return false
+                  }
+                  if (this.playerKeptIdMap(state)[String(item.character.id)]) {
                     return false
                   }
                   let character = item.character

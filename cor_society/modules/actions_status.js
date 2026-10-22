@@ -74,6 +74,71 @@
                   }
                   return seen
                 },
+        playerProtectedLineIdMap(state) {
+                  // The player's own line: the player, their spouse, every descendant and each
+                  // descendant's spouse. Siblings, cousins and their branches are not part of it.
+                  state = state || daapi.getState()
+                  let characters = state.characters || {}
+                  let currentId = this.currentCharacterId(state)
+                  let player = characters[currentId]
+                  let map = {}
+                  if (!player) {
+                    return map
+                  }
+                  let add = (id) => {
+                    if (id !== undefined && id !== null && id !== '' && characters[id]) {
+                      map[String(id)] = true
+                    }
+                  }
+                  add(currentId)
+                  add(player.spouseId)
+                  let visited = {}
+                  let queue = (player.childrenIds || []).slice()
+                  let guard = 0
+                  while (queue.length && guard < 400) {
+                    guard += 1
+                    let id = queue.shift()
+                    if (id === undefined || id === null || id === '' || visited[String(id)]) {
+                      continue
+                    }
+                    visited[String(id)] = true
+                    let character = characters[id]
+                    if (!character) {
+                      continue
+                    }
+                    add(id)
+                    add(character.spouseId)
+                    ;(character.childrenIds || []).forEach((childId) => queue.push(childId))
+                  }
+                  return map
+                },
+        playerKeptIdMap(state) {
+                  // The people the player keeps out of NPC-run houses: the protected line (see
+                  // playerProtectedLineIdMap) plus the player's ancestors and current household.
+                  state = state || daapi.getState()
+                  let characters = state.characters || {}
+                  let map = this.playerProtectedLineIdMap(state)
+                  let add = (id) => {
+                    if (id !== undefined && id !== null && id !== '' && characters[id]) {
+                      map[String(id)] = true
+                    }
+                  }
+                  ;((state.current && state.current.householdCharacterIds) || []).forEach(add)
+                  let player = characters[this.currentCharacterId(state)]
+                  let queue = player ? [player.fatherId, player.motherId] : []
+                  let guard = 0
+                  while (queue.length && guard < 64) {
+                    guard += 1
+                    let id = queue.shift()
+                    let ancestor = id !== undefined && id !== null && id !== '' ? characters[id] : null
+                    if (!ancestor) {
+                      continue
+                    }
+                    add(id)
+                    queue.push(ancestor.fatherId, ancestor.motherId)
+                  }
+                  return map
+                },
         isPlayerFreeFamilyCharacter(state, characterId, character) {
                   state = state || daapi.getState()
                   characterId = characterId !== undefined && characterId !== null && characterId !== '' ? characterId : (character && character.id)
