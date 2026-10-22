@@ -139,6 +139,14 @@
                   }
                   return map
                 },
+        isPlayerHouseRecord(house, state) {
+                  // The Society house that mirrors the player's own dynasty (its id is the dynasty id).
+                  if (!house || !house.id) {
+                    return false
+                  }
+                  let playerHouseId = this.currentCharacterDynastyId(state || daapi.getState())
+                  return !!(playerHouseId && String(house.id) === String(playerHouseId))
+                },
         isPlayerFreeFamilyCharacter(state, characterId, character) {
                   state = state || daapi.getState()
                   characterId = characterId !== undefined && characterId !== null && characterId !== '' ? characterId : (character && character.id)
