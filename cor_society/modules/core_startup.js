@@ -12,6 +12,9 @@
       }
       Object.assign(window.corSociety, {
         ensure(options) {
+                  if (this.flushPendingMonthlyWork) {
+                    this.flushPendingMonthlyWork()
+                  }
                   let state = daapi.getState()
                   if (!state || !state.current) {
                     return this.createState()

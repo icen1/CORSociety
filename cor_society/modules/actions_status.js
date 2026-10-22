@@ -1978,6 +1978,9 @@
                 },
         runAction(method, args) {
                   args = args || {}
+                  if (this.flushPendingMonthlyWork) {
+                    this.flushPendingMonthlyWork()
+                  }
                   if (!method || typeof this[method] !== 'function') {
                     return false
                   }
