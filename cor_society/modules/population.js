@@ -48,6 +48,30 @@
           let pending = ids.filter((id) => !entry.seen.has(String(id)) && !(characters[id] && characters[id].isDead)).length
           return entry.base + pending
         },
+        stripDeadCharacterButtons(state) {
+          // The bundled murder and play_as sub-mods add a per-character button (with a ~3.8 KB inline
+          // SVG icon) to every living character and delete it when they see the character dead, but
+          // the game runs per-character events for the living only, so the dead kept them: 6.3 MB of
+          // a 12.2 MB state in a real save. Live store state, worker idle.
+          if (typeof window !== 'undefined' && window.corSocietyDisableDeadButtonStrip) {
+            return 0
+          }
+          let characters = (state && state.characters) || {}
+          let stripped = 0
+          Object.keys(characters).forEach((id) => {
+            let character = characters[id]
+            let actions = character && character.isDead && character.actions
+            if (!actions || (!actions.mod_murder_startPlot && !actions.play_as)) {
+              return
+            }
+            let rest = Object.assign({}, actions)
+            delete rest.mod_murder_startPlot
+            delete rest.play_as
+            character.actions = rest
+            stripped += 1
+          })
+          return stripped
+        },
         isPopulationTrimCandidate(character) {
           return !!(character && character.isDead && (character.corSocietyGenerated || character.corSocietyGhostParent || character.corSocietyGeneratedConnector))
         },
@@ -104,9 +128,22 @@
           return removed
         },
         trimLivePopulationCount(store) {
+          // Runs before every month advance while the game's event worker is idle: the monthly strip
+          // of dead characters' buttons, then the population-count trim.
           let state = store && store.state
           if (!state || !state.current || state.current.showSpinner) {
             return 0
+          }
+          let month = (state.year || 0) * 13 + (state.month || 0)
+          if (this._deadButtonStripMonth !== month) {
+            this._deadButtonStripMonth = month
+            try {
+              if (this.stripDeadCharacterButtons(state) && this.invalidateStateSnapshot) {
+                this.invalidateStateSnapshot()
+              }
+            } catch (err) {
+              console.warn(err)
+            }
           }
           return this.trimGamePopulationCount(state)
         },
