@@ -15,6 +15,7 @@
   '/cor_society/modules/roster_overlays',
   '/cor_society/modules/log_utils',
   '/cor_society/modules/politics',
+  '/cor_society/modules/migrations',
   '/cor_society/modules/technical_safety',
   '/cor_society/modules/roman_systems',
   '/cor_society/modules/diagnostics',

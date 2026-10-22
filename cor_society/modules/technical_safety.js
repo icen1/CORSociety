@@ -14,7 +14,7 @@
       let previousDebugSectionOptions = window.corSociety.debugSectionOptions
       Object.assign(window.corSociety, {
         currentSchemaVersion() {
-          return 2
+          return 3
         },
         runSocietyMigrations(society, state) {
           if (!society || typeof society !== 'object') {
@@ -46,8 +46,16 @@
             society.rome.priesthoods = society.rome.priesthoods || {}
             society.rome.imperialCult = society.rome.imperialCult || {}
             society.schemaVersion = 2
+            current = 2
           }
-          if (society.schemaVersion < target) {
+          // Steps 3 and up repair game records (modules/migrations.js) and need the game state.
+          let gameState = state || (typeof daapi !== 'undefined' && daapi && daapi.getState ? daapi.getState() : null)
+          if (current < 3 && gameState) {
+            if (this.repairCharacterDynastyPointers) this.repairCharacterDynastyPointers(society, gameState)
+            society.schemaVersion = 3
+            current = 3
+          }
+          if (gameState && society.schemaVersion < target) {
             society.schemaVersion = target
           }
           this.ensureAdvancedDataShape(society, state)

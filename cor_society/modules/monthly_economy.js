@@ -112,6 +112,9 @@
                       refresh()
                     }
                     step('maintainDynastyHouseSystem-final', () => this.maintainDynastyHouseSystem(society, daapi.getState(), { force: true, phase: 'monthly-final', repairCadetBranches: true }))
+                    if (this.repairCharacterDynastyPointers) {
+                      step('repairCharacterDynastyPointers', () => this.repairCharacterDynastyPointers(society, daapi.getState()))
+                    }
                     step('monthlyEvents', () => {
                       let familyCareQueued = this.queueFamilyCareEvent(society, state)
                       if (society.settings.monthlyEvents && Math.random() < (familyCareQueued ? 0.32 : 0.64)) {
