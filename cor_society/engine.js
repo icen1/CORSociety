@@ -35,6 +35,9 @@
     boot() {
       if (window.corSociety && window.corSociety.version === '1.1.331') {
         daapi.invokeMethod({ event: '/cor_society/engine', method: 'applyRefactorMixins' })
+        if (window.corSociety.installStateSnapshotCache) {
+          window.corSociety.installStateSnapshotCache()
+        }
         window.corSociety.installDebugConsoleCommand()
         window.corSociety.installDebtSaleModalPatch()
         window.corSociety.registerPlayerEntryActions()
@@ -54,6 +57,9 @@
       }
 
       daapi.invokeMethod({ event: '/cor_society/engine', method: 'applyRefactorMixins' })
+      if (window.corSociety.installStateSnapshotCache) {
+        window.corSociety.installStateSnapshotCache()
+      }
       window.corSociety.ensure()
       window.corSociety.installDebugConsoleCommand()
       window.corSociety.installDebtSaleModalPatch()

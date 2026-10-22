@@ -1859,6 +1859,7 @@
                     if (state.settings) {
                       state.settings.enableAPIAchievements = true
                     }
+                    this.invalidateStateSnapshot()
                   } catch (err) {
                     console.warn(err)
                   }

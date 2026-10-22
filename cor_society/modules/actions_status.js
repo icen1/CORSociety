@@ -254,6 +254,8 @@
                     if (injected.map(String).indexOf(id) < 0) injected.push(id)
                   })
                   society.householdSlaveInjectedIds = injected
+                  // state.current is a getState() copy edited in place; keep the edit out of the shared snapshot.
+                  this.invalidateStateSnapshot()
                   return changed
                 },
         enslavedPurchaseInfo(society, state, house, character) {

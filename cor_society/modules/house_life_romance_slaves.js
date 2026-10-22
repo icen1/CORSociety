@@ -1058,6 +1058,7 @@
                         character = daapi.getCharacter({ characterId: slave.characterId })
                         if (character && state && state.characters) {
                           state.characters[slave.characterId] = character
+                          this.invalidateStateSnapshot()
                         }
                       } catch (err) {
                         character = false

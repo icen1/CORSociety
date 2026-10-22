@@ -524,6 +524,67 @@
         safeId(value) {
                   return String(value || '').replace(/[^a-zA-Z0-9_]/g, '_')
                 },
+        installStateSnapshotCache() {
+                  // daapi.getState() deep-copies the whole game state on every call (game 1.6.37:
+                  // JSON.parse(stringify(state))), and the mod calls it from ~390 places, so most of a
+                  // month's work was copying. Hand out one copy per synchronous task instead. Any other
+                  // daapi call may change the game, so it drops the copy; code that edits a getState()
+                  // result in place must call invalidateStateSnapshot() so nobody else sees the edit.
+                  if (typeof daapi === 'undefined' || !daapi || typeof daapi.getState !== 'function') {
+                    return false
+                  }
+                  if (daapi.getState.__corSocietySnapshot) {
+                    return true
+                  }
+                  let holder = { value: null }
+                  this._stateSnapshotHolder = holder
+                  let original = daapi.getState
+                  let reads = { getState: true, getCharacter: true, getDynasty: true, getGlobalFlag: true, getCharacterFlag: true, requireImage: true, getCharacterIcon: true, getPetIcon: true, getJobsForCharacter: true }
+                  // Modal / UI-only calls change nothing the mod reads back, and the bundled translator
+                  // hooks the modal queue by function identity, so leave them untouched.
+                  let untouched = { pushInteractionModalQueue: true, pushInteractionModalButtonQueue: true, displayInteractionModal: true, updateInteractionModal: true, processInteractionModalQueue: true, forceUpdateCharacterDisplay: true, playSound: true, openDevTools: true, closeDevTools: true }
+                  Object.keys(daapi).forEach((key) => {
+                    let fn = daapi[key]
+                    if (typeof fn !== 'function' || reads[key] || untouched[key] || /^calculate/.test(key) || /^corSociety|^CORSociety/.test(key)) {
+                      return
+                    }
+                    let wrapped = function() {
+                      holder.value = null
+                      try {
+                        return fn.apply(this, arguments)
+                      } finally {
+                        holder.value = null
+                      }
+                    }
+                    // keep markers other mods put on the function (e.g. hook versions)
+                    Object.keys(fn).forEach((prop) => {
+                      wrapped[prop] = fn[prop]
+                    })
+                    daapi[key] = wrapped
+                  })
+                  let snapshot = function() {
+                    if (typeof window !== 'undefined' && window.corSocietyDisableSnapshotCache) {
+                      holder.value = null
+                      return original.apply(this, arguments)
+                    }
+                    if (holder.value) {
+                      return holder.value
+                    }
+                    holder.value = original.apply(this, arguments)
+                    Promise.resolve().then(() => {
+                      holder.value = null
+                    })
+                    return holder.value
+                  }
+                  snapshot.__corSocietySnapshot = true
+                  daapi.getState = snapshot
+                  return true
+                },
+        invalidateStateSnapshot() {
+                  if (this._stateSnapshotHolder) {
+                    this._stateSnapshotHolder.value = null
+                  }
+                },
         daapiReady() {
                   // The game deletes and rebuilds window.daapi (setupDAAPI) when a save loads, and only
                   // repopulates modData after the mod files reload. Timers and observers must skip

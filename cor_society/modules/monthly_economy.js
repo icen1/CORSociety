@@ -12,6 +12,11 @@
       }
       Object.assign(window.corSociety, {
         monthlyTick() {
+                  // The game's own monthly events ran just before this in the same task; never reuse a
+                  // state snapshot taken before them.
+                  if (this.invalidateStateSnapshot) {
+                    this.invalidateStateSnapshot()
+                  }
                   let state = daapi.getState()
                   let society = this.loadForAction()
                   if (!society || !society.settings.enabled) {

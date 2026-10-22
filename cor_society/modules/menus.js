@@ -3940,6 +3940,7 @@
                         let prospect = daapi.getCharacter({ characterId: prospectId })
                         if (prospect && state.characters) {
                           state.characters[prospectId] = prospect
+                          this.invalidateStateSnapshot()
                         }
                       } catch (err) {
                         console.warn(err)

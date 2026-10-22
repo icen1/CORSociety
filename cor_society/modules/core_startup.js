@@ -194,6 +194,8 @@
                   })
                   target = target.slice(0, limit)
                   current.formerHouseholdCharacterIds = this.uniqueIds(naturalFormer.concat(target))
+                  // state.current is a getState() copy edited in place; keep the edit out of the shared snapshot.
+                  this.invalidateStateSnapshot()
                   society.extendedKinVisibilityIds = target
                   society.extendedKinVisibilityMonth = month
                   society.extendedKinVisibility = {
