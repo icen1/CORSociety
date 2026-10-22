@@ -14,6 +14,9 @@
         monthlyTick() {
                   // Finish last month's sliced work before starting a new month.
                   this.flushPendingMonthlyWork()
+                  if (this.pruneGameSessionErrorLog) {
+                    this.pruneGameSessionErrorLog()
+                  }
                   // The game's own monthly events ran just before this in the same task; never reuse a
                   // state snapshot taken before them.
                   if (this.invalidateStateSnapshot) {

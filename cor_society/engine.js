@@ -38,6 +38,9 @@
         if (window.corSociety.installStateSnapshotCache) {
           window.corSociety.installStateSnapshotCache()
         }
+        if (window.corSociety.installGameErrorLogGuard) {
+          window.corSociety.installGameErrorLogGuard()
+        }
         window.corSociety.installDebugConsoleCommand()
         window.corSociety.installDebtSaleModalPatch()
         window.corSociety.registerPlayerEntryActions()
@@ -59,6 +62,9 @@
       daapi.invokeMethod({ event: '/cor_society/engine', method: 'applyRefactorMixins' })
       if (window.corSociety.installStateSnapshotCache) {
         window.corSociety.installStateSnapshotCache()
+      }
+      if (window.corSociety.installGameErrorLogGuard) {
+        window.corSociety.installGameErrorLogGuard()
       }
       window.corSociety.ensure()
       window.corSociety.installDebugConsoleCommand()
@@ -95,7 +101,8 @@
         { event: '/cor_society/modules/log_utils', method: '_mixinCorSocietyLogUtils' },
         { event: '/cor_society/modules/politics', method: '_mixinCorSocietyPolitics' },
         { event: '/cor_society/modules/technical_safety', method: '_mixinCorSocietyTechnicalSafety' },
-        { event: '/cor_society/modules/roman_systems', method: '_mixinCorSocietyRomanSystems' }
+        { event: '/cor_society/modules/roman_systems', method: '_mixinCorSocietyRomanSystems' },
+        { event: '/cor_society/modules/diagnostics', method: '_mixinCorSocietyDiagnostics' }
       ]
       mixins.forEach((mixin) => {
         try {

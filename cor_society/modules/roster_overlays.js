@@ -532,6 +532,9 @@
                   this.applyFamilySocietyButtons()
                   this.registerPlayerEntryActions(state)
                   this.applyPlayerCrestOverlay(state)
+                  if (this.installGameErrorLogGuard) {
+                    this.installGameErrorLogGuard()
+                  }
                 },
         applyPlayerStatusOverlay(state) {
                   if (typeof document === 'undefined') {
