@@ -225,7 +225,7 @@
                   let syncTimer = false
                   let sync = () => {
                     try {
-                      if (window.corSociety) {
+                      if (window.corSociety && window.corSociety.daapiReady && window.corSociety.daapiReady()) {
                         window.corSociety.injectDebtLoanButtonIntoDebtModal()
                       }
                     } catch (err) {

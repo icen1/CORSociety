@@ -319,6 +319,8 @@
                     if (injected.map(String).indexOf(id) < 0) injected.push(id)
                   })
                   society.householdSlaveInjectedIds = injected
+                  // state.current is a getState() copy edited in place; keep the edit out of the shared snapshot.
+                  this.invalidateStateSnapshot()
                   return changed
                 },
         enslavedPurchaseInfo(society, state, house, character) {
@@ -568,7 +570,7 @@
                   let houses = this.sortedHouses(society).filter((house) => {
                     return house && house.stratum !== 'poor' && String(house.id) !== String(character.dynastyId || '') && String(house.id) !== String(playerHouseId || '') && Math.abs(this.socialLevel(house.stratum) - this.socialLevel(this.playerStratum(state))) <= 2
                   })
-                  while (candidates.length < 4 && houses.length && (society.generatedCharacterIds || []).length < 420) {
+                  while (candidates.length < 4 && houses.length && this.livingGeneratedCount(society, state) < 420) {
                     let house = this.pick(houses)
                     let id = this.generateMarriageProspect(society, state, house, character)
                     state = daapi.getState()
@@ -2041,6 +2043,9 @@
                 },
         runAction(method, args) {
                   args = args || {}
+                  if (this.flushPendingMonthlyWork) {
+                    this.flushPendingMonthlyWork()
+                  }
                   if (!method || typeof this[method] !== 'function') {
                     return false
                   }

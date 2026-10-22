@@ -1058,6 +1058,7 @@
                         character = daapi.getCharacter({ characterId: slave.characterId })
                         if (character && state && state.characters) {
                           state.characters[slave.characterId] = character
+                          this.invalidateStateSnapshot()
                         }
                       } catch (err) {
                         character = false
@@ -2690,7 +2691,7 @@
                   let generated = 0
                   let houseIds = Object.keys(society.houses)
                   for (let i = 0; i < houseIds.length; i++) {
-                    if (generated >= budget || (society.generatedCharacterIds || []).length >= 260) {
+                    if (generated >= budget || this.livingGeneratedCount(society, state) >= 260) {
                       break
                     }
                     let house = society.houses[houseIds[i]]
@@ -2722,7 +2723,7 @@
                     if (!genderCounts.male || !genderCounts.female) {
                       // A house that lost one gender used to be left to die out. Give it a chance
                       // to recover by generating an adult of the missing gender instead of skipping.
-                      if (totalGeneratedThisTick < 6 && (society.generatedCharacterIds || []).length < 260 && this.repairHouseGenderViability(society, state, house)) {
+                      if (totalGeneratedThisTick < 6 && this.livingGeneratedCount(society, state) < 260 && this.repairHouseGenderViability(society, state, house)) {
                         state = daapi.getState()
                         totalGeneratedThisTick++
                         this.refreshHouseMemberLists(society, state, house)
@@ -2733,7 +2734,7 @@
                         continue
                       }
                     }
-                    while (visible.length < this.minimumVisibleMembers(house) && (society.generatedCharacterIds || []).length < 260 && totalGeneratedThisTick < 6) {
+                    while (visible.length < this.minimumVisibleMembers(house) && this.livingGeneratedCount(society, state) < 260 && totalGeneratedThisTick < 6) {
                       let headId = visible[0]
                       let head = state.characters[headId]
                       if (!head) {

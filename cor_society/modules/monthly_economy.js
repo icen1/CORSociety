@@ -12,6 +12,16 @@
       }
       Object.assign(window.corSociety, {
         monthlyTick() {
+                  // Finish last month's sliced work before starting a new month.
+                  this.flushPendingMonthlyWork()
+                  if (this.pruneGameSessionErrorLog) {
+                    this.pruneGameSessionErrorLog()
+                  }
+                  // The game's own monthly events ran just before this in the same task; never reuse a
+                  // state snapshot taken before them.
+                  if (this.invalidateStateSnapshot) {
+                    this.invalidateStateSnapshot()
+                  }
                   let state = daapi.getState()
                   let society = this.loadForAction()
                   if (!society || !society.settings.enabled) {
@@ -22,24 +32,36 @@
                   }
                   this.installDebtSaleModalPatch()
                   let monthKey = this.monthKey(state)
+                  // A processed month only runs again to finish what a save made mid-month left
+                  // undone: the game autosaves right after the mod's first slice.
+                  let progress = society.monthlyProgress
+                  let resumeFrom = 0
                   if (society.lastProcessedMonth === monthKey) {
-                    return
+                    if (!progress || progress.month !== monthKey) {
+                      return
+                    }
+                    resumeFrom = Math.max(0, parseInt(progress.done, 10) || 0)
+                  } else {
+                    society.monthlyProgress = { month: monthKey, done: 0 }
                   }
                   // Persist the month marker immediately. If any later step throws, the month is
                   // still marked as processed, so the whole pass (and its modals) is not replayed
                   // on every game tick, which used to flood notifications and slow the game down.
                   society.lastProcessedMonth = monthKey
                   this.save(society)
+                  // The steps below are queued, not run here: runMonthlyQueue works through them in
+                  // small slices so the game stays clickable (pause included) while the month finishes.
+                  let queue = []
                   let step = (name, fn) => {
-                    try {
-                      fn()
-                    } catch (err) {
-                      console.warn('Roman Society monthly step failed: ' + name, err)
-                      society.lastMonthlyError = name + ': ' + (err && err.message)
-                    }
+                    queue.push({ name, fn })
                   }
                   let refresh = () => {
-                    state = daapi.getState()
+                    queue.push({
+                      name: '',
+                      fn: () => {
+                        state = daapi.getState()
+                      }
+                    })
                   }
                   try {
                     step('repairPlayerFamilyHouseAssignment', () => this.repairPlayerFamilyHouseAssignment(society, state))
@@ -100,8 +122,111 @@
                       step('clearFamilyTreeRuntimeCache', () => this.clearFamilyTreeRuntimeCache())
                     }
                   } finally {
-                    this.save(society)
+                    this.runMonthlyQueue(society, queue, resumeFrom)
                   }
+                },
+        runMonthlyQueue(society, queue, resumeFrom) {
+                  // Mod code must run on the game's main thread (the game hard-wires DAAPI events there),
+                  // so instead of one long block the month runs in slices with a setTimeout in between:
+                  // clicks, pause and the game's own worker results get handled meanwhile. Each slice
+                  // needs a fresh getState() copy (the snapshot cache is per task), so slices are ~120 ms:
+                  // a little more total work than one block, with a much shorter longest freeze.
+                  // Tune in-game with window.corSocietyMonthlySliceMs; disable with
+                  // window.corSocietyDisableMonthlySlicing = true.
+                  // Anything that reads Society state first completes the pending month
+                  // (flushPendingMonthlyWork from monthlyTick, runAction and ensure).
+                  // society.monthlyProgress records how many steps have started, so a save made
+                  // mid-month (the game autosaves right after the first slice) resumes after the last
+                  // step that started; a step that crashed the game is not run again.
+                  this.flushPendingMonthlyWork()
+                  let progress = society.monthlyProgress
+                  let from = Math.max(0, parseInt(resumeFrom, 10) || 0)
+                  if (from && (!progress || progress.total !== queue.length)) {
+                    // The step list changed (another version made this save): do not guess which
+                    // steps already ran.
+                    delete society.monthlyProgress
+                    this.save(society)
+                    return
+                  }
+                  if (progress) {
+                    progress.total = queue.length
+                  }
+                  let job = { society, queue, index: from, done: false }
+                  let canSlice = typeof window !== 'undefined' && typeof window.setTimeout === 'function' && !window.corSocietyDisableMonthlySlicing
+                  if (!canSlice) {
+                    this.runMonthlySteps(job, Infinity)
+                    return
+                  }
+                  this._pendingMonthly = job
+                  let pump = () => {
+                    if (this._pendingMonthly !== job) {
+                      return
+                    }
+                    this.runMonthlySteps(job, Math.max(1, parseFloat(window.corSocietyMonthlySliceMs) || 120))
+                    if (!job.done) {
+                      window.setTimeout(pump, 0)
+                    }
+                  }
+                  pump()
+                },
+        runMonthlySteps(job, budgetMs) {
+                  if (!this.monthlyJobIsCurrent(job)) {
+                    // A save loaded since this month began replaced the Society state: the remaining
+                    // steps belong to the old game and must not run against, or save into, the new one.
+                    job.done = true
+                    if (this._pendingMonthly === job) {
+                      this._pendingMonthly = null
+                    }
+                    return
+                  }
+                  let clock = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now())
+                  let started = clock()
+                  while (job.index < job.queue.length) {
+                    let item = job.queue[job.index]
+                    job.index += 1
+                    if (job.society.monthlyProgress) {
+                      job.society.monthlyProgress.done = job.index
+                    }
+                    this._runningMonthlyStep = true
+                    try {
+                      item.fn()
+                    } catch (err) {
+                      console.warn('Roman Society monthly step failed: ' + (item.name || 'refresh'), err)
+                      if (item.name) {
+                        job.society.lastMonthlyError = item.name + ': ' + (err && err.message)
+                      }
+                    } finally {
+                      this._runningMonthlyStep = false
+                    }
+                    if (clock() - started >= budgetMs) {
+                      break
+                    }
+                  }
+                  if (job.index >= job.queue.length && !job.done) {
+                    job.done = true
+                    if (this._pendingMonthly === job) {
+                      this._pendingMonthly = null
+                    }
+                    delete job.society.monthlyProgress
+                    this.save(job.society)
+                  }
+                },
+        monthlyJobIsCurrent(job) {
+                  // Global flags are kept by reference, so the job's Society object is the live flag
+                  // until a save load (or a reset) replaces it.
+                  try {
+                    return typeof daapi !== 'undefined' && !!daapi && daapi.getGlobalFlag({ flag: this.flag }) === job.society
+                  } catch (err) {
+                    return false
+                  }
+                },
+        flushPendingMonthlyWork() {
+                  let job = this._pendingMonthly
+                  if (!job || this._runningMonthlyStep) {
+                    return false
+                  }
+                  this.runMonthlySteps(job, Infinity)
+                  return true
                 },
         extinctionNoticesEnabled(society) {
                   // Extinct-house popups are opt-in: they are always written to the Society log and
@@ -198,7 +323,7 @@
                       if (Math.random() < 0.10) {
                         event = 'marriageAlliance'
                         house.power += 3
-                        if ((house.memberIds || []).length < 8 && society.generatedCharacterIds.length < 140) {
+                        if ((house.memberIds || []).length < 8 && this.livingGeneratedCount(society, state) < 140) {
                           this.generateHouseMember(society, state, house)
                         }
                       }
