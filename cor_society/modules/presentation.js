@@ -304,6 +304,9 @@
                   }
                   let options = payload.options || []
                   if (payload.societySummaryOptions && payload.societySummaryOptions.length) {
+                    payload.societySummaryOptions.forEach((option) => {
+                      if (option && typeof option === 'object') option.corSocietySummaryTile = true
+                    })
                     options = payload.societySummaryOptions.concat(options)
                   }
                   payload.options = this.decorateModalOptions(this.addSocietyCloseOption(options, payload), payload)
@@ -381,7 +384,8 @@
                     disabled: true,
                     showDisabledWithTooltip: true,
                     tooltip: tooltip || text,
-                    icons: (icons || []).filter(Boolean)
+                    icons: (icons || []).filter(Boolean),
+                    corSocietySummaryTile: true
                   }
                 },
         hubSummaryOptions(state, society, counts, rivals, allies, playerStatus) {
@@ -628,6 +632,13 @@
                   }
                   if (option.disabled && option.tooltip) {
                     option.showDisabledWithTooltip = true
+                  }
+                  if (option.disabled && option.showDisabledWithTooltip === true) {
+                    // The game renders `disabled && showDisabledWithTooltip || tooltip` as text under the
+                    // option and expects a string (vanilla passes the reason). A boolean throws
+                    // "t.forEach is not a function" in ProcessedMessageComponent on every render.
+                    // Summary tiles keep a blank box so the summary screens look unchanged.
+                    option.showDisabledWithTooltip = option.corSocietySummaryTile ? ' ' : String(option.tooltip || option.text || ' ')
                   }
                   return option
                 },
