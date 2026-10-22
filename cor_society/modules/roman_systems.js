@@ -42,18 +42,11 @@
           return result
         },
         installTaxCrimeModalPatch() {
-          if (this.taxCrimeModalPatchInstalled) return true
+          // Re-checked on every call (cheap): the game rebuilds daapi on save load.
           this.taxCrimeModalPatchInstalled = true
           ;['pushInteractionModalQueue', 'pushInteractionModalButtonQueue'].forEach((methodName) => {
             try {
-              let original = daapi[methodName]
-              if (typeof original !== 'function' || original.corSocietyTaxCrimePatch) return
-              let self = this
-              let wrapped = function(payload) {
-                return original.call(this, self.patchTaxCrimeModalPayload(payload))
-              }
-              wrapped.corSocietyTaxCrimePatch = true
-              daapi[methodName] = wrapped
+              this.wrapModalFunction(methodName, 'corSocietyTaxCrimePatch', (payload) => this.patchTaxCrimeModalPayload(payload))
             } catch (err) {
               console.warn(err)
             }
