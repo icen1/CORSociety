@@ -47,9 +47,6 @@
                       } catch (openErr) {
                         console.warn(openErr)
                       }
-                      if (typeof console !== 'undefined' && console.log) {
-                        console.log('CORSociety debug snapshot (' + section + ')', snapshot)
-                      }
                     } catch (err) {
                       console.warn(err)
                       snapshot = { error: err.name + ': ' + err.message }
@@ -342,9 +339,6 @@
                   section = section || 'overview'
                   page = parseInt(page || 0, 10)
                   let snapshot = this.debugSnapshot(section)
-                  if (typeof console !== 'undefined' && console.log) {
-                    console.log('CORSociety debug window snapshot (' + section + ')', snapshot)
-                  }
                   let options = this.debugSectionOptions(section)
                   let message = ''
                   let summary = []
