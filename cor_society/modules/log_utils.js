@@ -524,6 +524,12 @@
         safeId(value) {
                   return String(value || '').replace(/[^a-zA-Z0-9_]/g, '_')
                 },
+        daapiReady() {
+                  // The game deletes and rebuilds window.daapi (setupDAAPI) when a save loads, and only
+                  // repopulates modData after the mod files reload. Timers and observers must skip
+                  // that window or they throw "daapi is not defined" / read modData.images of undefined.
+                  return typeof daapi !== 'undefined' && !!daapi && !!daapi.modData && !!daapi.modData.images
+                },
         signed(value) {
                   value = Math.round(value || 0)
                   return (value > 0 ? '+' : '') + value

@@ -514,7 +514,7 @@
                   if (typeof window !== 'undefined' && window.setInterval) {
                     window.setInterval(() => {
                       try {
-                        if (window.corSociety) {
+                        if (window.corSociety && window.corSociety.daapiReady && window.corSociety.daapiReady()) {
                           window.corSociety.applyPlayerStatusOverlay()
                           window.corSociety.applyPortraitOverlays()
                           window.corSociety.applyFamilySocietyButtons()
@@ -960,7 +960,7 @@
                   if (typeof window !== 'undefined' && window.setInterval) {
                     window.setInterval(() => {
                       try {
-                        if (window.corSociety) {
+                        if (window.corSociety && window.corSociety.daapiReady && window.corSociety.daapiReady()) {
                           window.corSociety.applyPlayerCrestOverlay()
                         }
                       } catch (err) {
