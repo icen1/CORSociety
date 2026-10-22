@@ -41,6 +41,9 @@
         if (window.corSociety.installGameErrorLogGuard) {
           window.corSociety.installGameErrorLogGuard()
         }
+        if (window.corSociety.installPopulationCountGuard) {
+          window.corSociety.installPopulationCountGuard()
+        }
         window.corSociety.installDebugConsoleCommand()
         window.corSociety.installDebtSaleModalPatch()
         window.corSociety.registerPlayerEntryActions()
@@ -65,6 +68,9 @@
       }
       if (window.corSociety.installGameErrorLogGuard) {
         window.corSociety.installGameErrorLogGuard()
+      }
+      if (window.corSociety.installPopulationCountGuard) {
+        window.corSociety.installPopulationCountGuard()
       }
       window.corSociety.ensure()
       window.corSociety.installDebugConsoleCommand()
@@ -102,7 +108,8 @@
         { event: '/cor_society/modules/politics', method: '_mixinCorSocietyPolitics' },
         { event: '/cor_society/modules/technical_safety', method: '_mixinCorSocietyTechnicalSafety' },
         { event: '/cor_society/modules/roman_systems', method: '_mixinCorSocietyRomanSystems' },
-        { event: '/cor_society/modules/diagnostics', method: '_mixinCorSocietyDiagnostics' }
+        { event: '/cor_society/modules/diagnostics', method: '_mixinCorSocietyDiagnostics' },
+        { event: '/cor_society/modules/population', method: '_mixinCorSocietyPopulation' }
       ]
       mixins.forEach((mixin) => {
         try {

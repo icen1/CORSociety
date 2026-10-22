@@ -535,6 +535,9 @@
                   if (this.installGameErrorLogGuard) {
                     this.installGameErrorLogGuard()
                   }
+                  if (this.installPopulationCountGuard) {
+                    this.installPopulationCountGuard()
+                  }
                 },
         applyPlayerStatusOverlay(state) {
                   if (typeof document === 'undefined') {

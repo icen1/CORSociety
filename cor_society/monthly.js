@@ -18,6 +18,7 @@
   '/cor_society/modules/technical_safety',
   '/cor_society/modules/roman_systems',
   '/cor_society/modules/diagnostics',
+  '/cor_society/modules/population',
   '/cor_society/character_actions',
   '/cor_society/main',
   '/cor_society/bundled/play_as/main',

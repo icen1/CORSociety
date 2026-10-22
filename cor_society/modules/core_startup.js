@@ -224,7 +224,9 @@
                   if (configured) {
                     return this.clamp(configured, 80, 320)
                   }
-                  let characterCount = state && state.characterIds ? state.characterIds.length : Object.keys((state && state.characters) || {}).length
+                  // Counts records, not characterIds: population.js leaves dead generated records out
+                  // of that list, which must not raise this limit.
+                  let characterCount = Object.keys((state && state.characters) || {}).length
                   if (characterCount > 900) return 150
                   if (characterCount > 600) return 190
                   return 240
