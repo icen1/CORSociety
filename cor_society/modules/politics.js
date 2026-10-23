@@ -1423,8 +1423,12 @@
                   let society = this.loadForAction()
                   let state = daapi.getState()
                   this.ensureRomeState(society)
-                  this.applyStats({ influence: -20 })
                   let character = state.characters && state.characters[characterId]
+                  if (!character) {
+                    this.openImperialActions({ houseId })
+                    return
+                  }
+                  this.applyStats({ influence: -20 })
                   let house = society.houses[houseId]
                   let traits = (character && character.traits) || []
                   let suspicion = (house ? (house.heat || 0) * 0.04 + (house.rivalry ? 0.15 : 0) : 0) +
