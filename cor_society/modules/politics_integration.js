@@ -16,19 +16,24 @@
       // - the cursus runs through the game's own elections (months 10-12, its prerequisites, real
       //   jobs and former-office traits); buying ludi seats in its campaign is recorded as ambitus;
       // - dictator / emperor get traits, a status badge and monthly influence and prestige;
-      // - legions and clients pay monthly influence (legions also prestige) with badges;
+      // - legions and clients pay monthly influence (legions also prestige) with badges; campaigns
+      //   declare or join the game's war; victories, triumphs and acclamations give real traits;
       // - political cash costs follow inflation: the median house wealth / 12,000 (0.5x-4x).
       // replaces: openCursus, standForOffice, buyVotes (offices now go through the game's elections)
       let previousPoliticsAction = window.corSociety.politicsAction
       let previousApplyStats = window.corSociety.applyStats
       let previousCostLabel = window.corSociety.costLabel
+      let previousCampaignExterior = window.corSociety.campaignExterior
+      let previousHoldTriumph = window.corSociety.holdTriumph
+      let previousMilitaryAcclamation = window.corSociety.militaryAcclamation
       let previousUpkeep = window.corSociety.simulateClientelaAndLegionUpkeep
       Object.assign(window.corSociety, {
         politicalTraitDefinitions() {
           return {
             corSocietyDictator: { title: 'Dictator', description: 'Holds the dictatorship of Rome.', group: 'skill', skills: { stewardship: 2, combat: 2, eloquence: 2, intelligence: 1 }, points: 900 },
             corSocietyFormerDictator: { title: 'Former Dictator', description: 'Once held the dictatorship of Rome.', group: 'skill', skills: { stewardship: 1, combat: 1, eloquence: 1, intelligence: 0.5 }, points: 850 },
-            corSocietyImperatorAugustus: { title: 'Imperator Augustus', description: 'Rules Rome as emperor.', group: 'skill', skills: { stewardship: 3, combat: 3, eloquence: 3, intelligence: 2 }, points: 1200 }
+            corSocietyImperatorAugustus: { title: 'Imperator Augustus', description: 'Rules Rome as emperor.', group: 'skill', skills: { stewardship: 3, combat: 3, eloquence: 3, intelligence: 2 }, points: 1200 },
+            corSocietyImperatorAcclaimed: { title: 'Imperator (acclaimed)', description: 'Hailed imperator by the legions.', group: 'militaryHonor', skills: { combat: 2, eloquence: 1 }, points: 700 }
           }
         },
         installPoliticalTraitDefinitions() {
@@ -47,7 +52,7 @@
               daapi.addOrEditTraitDefinition({
                 trait,
                 traitInfo: { group: def.group, modifiers: { skills: def.skills }, opposites: [], isStackable: false, points: def.points },
-                icon,
+                icon: trait === 'corSocietyImperatorAcclaimed' && this.lawIcon ? this.lawIcon('war') : icon,
                 text: { title: def.title, description: def.description }
               })
             } catch (err) {
@@ -161,6 +166,19 @@
             console.warn(err)
           }
         },
+        grantGameTrait(characterId, trait) {
+          let character = characterId && daapi.getCharacter({ characterId })
+          if (!character || (character.traits || []).indexOf(trait) >= 0) {
+            return false
+          }
+          try {
+            daapi.addTrait({ characterId, trait })
+            return true
+          } catch (err) {
+            console.warn(err)
+            return false
+          }
+        },
         vanillaCareerOffice(character) {
           // The Society's office line (auctoritas, Roman Power summary) mirrors the game's career:
           // the current magistracy, else the highest office held before.
@@ -230,6 +248,50 @@
           this.setSocietyStatus(currentId, 'cor_society_clients_status', clients ? 'Clients: ' + clients : '', this.affairIcon('support'), player)
           this.setSocietyIncome('influence', 'cor_society_clients', Math.floor(clients / 4), ' - Roman Society: clientela', state, force)
           return true
+        },
+        campaignExterior(args) {
+          // A foreign campaign is fought in the game's own war: declare one if Rome is at peace,
+          // and the commander joins it through the game's conscription (rank from their career).
+          let state = daapi.getState()
+          let currentId = this.currentCharacterId(state)
+          let pp = this.load().playerPolitics || {}
+          let victories = pp.victories || 0
+          try {
+            if (state.current && !state.current.flagRomeAtWar && typeof daapi.startWar === 'function') {
+              daapi.startWar()
+            }
+            let player = daapi.getCharacter({ characterId: currentId })
+            if (player && !player.flagAtWar && typeof daapi.joinWar === 'function') {
+              daapi.joinWar({ characterId: currentId })
+            }
+          } catch (err) {
+            console.warn(err)
+          }
+          let result = previousCampaignExterior.call(this, args)
+          if (((this.load().playerPolitics || {}).victories || 0) > victories) {
+            this.grantGameTrait(currentId, 'veteran')
+          }
+          return result
+        },
+        holdTriumph(args) {
+          let currentId = this.currentCharacterId(daapi.getState())
+          let victories = (this.load().playerPolitics || {}).victories || 0
+          let result = previousHoldTriumph.call(this, args)
+          if (((this.load().playerPolitics || {}).victories || 0) < victories) {
+            this.grantGameTrait(currentId, 'coronaTriumphalis')
+          }
+          return result
+        },
+        militaryAcclamation(args) {
+          let currentId = this.currentCharacterId(daapi.getState())
+          let before = (this.load().rome || {}).civilWarPending
+          let result = previousMilitaryAcclamation.call(this, args)
+          let after = (this.load().rome || {}).civilWarPending
+          if (after && after !== before) {
+            this.installPoliticalTraitDefinitions()
+            this.grantGameTrait(currentId, 'corSocietyImperatorAcclaimed')
+          }
+          return result
         },
         invokeGameMethod(method) {
           // Run one of the game's own event methods the way its UI does (store action invokeMethod).
