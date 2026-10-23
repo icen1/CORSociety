@@ -39,6 +39,10 @@
                   if (!house || !houses || !houses.length || !house.memberIds || !house.memberIds.length) {
                     return false
                   }
+                  if (this.isPlayerHouseRecord(house, state)) {
+                    // The player decides their own house's violence; NPC feud murders are for NPC houses.
+                    return false
+                  }
                   let pressure = (house.agenda === 'revenge' ? 0.055 : 0.012) + Math.max(0, (house.heat || 0) - 2) * 0.004
                   if (Math.random() > this.clamp(pressure, 0.006, 0.09)) {
                     return false
@@ -145,6 +149,9 @@
                   return true
                 },
         eligibleHouseMarriageAdults(house, state) {
+                  // NPC-arranged marriages never take the people the player keeps (playerKeptIdMap),
+                  // wherever they live; the player arranges those marriages.
+                  let kept = this.playerKeptIdMap(state)
                   return this.visibleHousePeople(house, state)
                     .map((characterId) => {
                       let character = state.characters[characterId]
@@ -154,7 +161,7 @@
                       return character
                     })
                     .filter((character) => {
-                      if (!this.isMarriageEligible(character, state)) {
+                      if (!this.isMarriageEligible(character, state) || kept[String(character.id)]) {
                         return false
                       }
                       let age = this.age(character, state)
@@ -163,6 +170,7 @@
                     .sort((a, b) => this.characterScore(b, state) - this.characterScore(a, state))
                 },
         tryHousePregnancy(society, state, house) {
+                  let kept = this.playerKeptIdMap(state)
                   let couples = []
                   this.visibleHousePeople(house, state).forEach((characterId) => {
                     let character = state.characters[characterId]
@@ -178,6 +186,10 @@
                     let mother = this.characterIsMale(character) ? spouse : character
                     let father = this.characterIsMale(character) ? character : spouse
                     if (!mother || !father || mother.startedPregnancyTime) {
+                      return
+                    }
+                    if (kept[String(mother.id)] || kept[String(father.id)]) {
+                      // The game runs the player's family's own pregnancies.
                       return
                     }
                     let age = this.age(mother, state)
@@ -2656,7 +2668,13 @@
                   return true
                 },
         generateHouseMember(society, state, house) {
-                  let headId = (house.notableIds || house.memberIds || [])[0]
+                  if (this.isPlayerHouseRecord(house, state)) {
+                    // The player house is a real game family; never pad it with generated people.
+                    return false
+                  }
+                  // The new relative is the head's child: never anchor it on someone the player keeps.
+                  let kept = this.playerKeptIdMap(state)
+                  let headId = (house.notableIds || house.memberIds || []).find((id) => !kept[String(id)])
                   let head = state.characters[headId]
                   if (!head) {
                     return false
@@ -2670,6 +2688,10 @@
                   // Give a struggling house (living members, but only one gender left) a chance to
                   // continue instead of dwindling to extinction. Returns true if a member was added.
                   if (!house || !house.id || !state || !state.characters) {
+                    return false
+                  }
+                  if (this.isPlayerHouseRecord(house, state)) {
+                    // The player house is a real game family; never pad it with generated people.
                     return false
                   }
                   let living = this.houseLivingMemberIds(society, state, house)
@@ -2712,12 +2734,18 @@
                 },
         ensureVisibleHouseMembers(society, state) {
                   let totalGeneratedThisTick = 0
+                  // Generated spouses and relatives attach to a house member: never one the player keeps.
+                  let kept = this.playerKeptIdMap(state)
                   for (let houseId in society.houses) {
                     if (!society.houses.hasOwnProperty(houseId)) {
                       continue
                     }
                     let house = society.houses[houseId]
                     this.refreshHouseMemberLists(society, state, house)
+                    if (this.isPlayerHouseRecord(house, state)) {
+                      // The player house is a real game family: never padded or retired here.
+                      continue
+                    }
                     let visible = this.visibleHousePeople(house, state)
                     if (!visible.length) {
                       if (this.retireHouse(society, state, house, { notify: false })) {
@@ -2740,7 +2768,7 @@
                       }
                     }
                     while (visible.length < this.minimumVisibleMembers(house) && this.livingGeneratedCount(society, state) < 260 && totalGeneratedThisTick < 6) {
-                      let headId = visible[0]
+                      let headId = visible.find((id) => !kept[String(id)])
                       let head = state.characters[headId]
                       if (!head) {
                         break
