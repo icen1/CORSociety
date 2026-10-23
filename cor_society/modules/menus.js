@@ -4299,8 +4299,9 @@
                   }
                   amount = Math.min(principal, amount)
                   let total = interest + amount
-                  let cash = parseFloat(((state || {}).current || {}).cash || 0)
+                  let cash = this.cashBeforeClick(state)
                   if (total <= 0 || cash < total) {
+                    this.refundVanillaStatChanges()
                     this.pushModal({
                       societyMenu: true,
                       title: 'Bank payment unavailable',

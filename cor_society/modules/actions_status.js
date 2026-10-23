@@ -666,13 +666,15 @@
                   let spouse = state.characters && state.characters[spouseId]
                   let house = society.houses[houseId] || (spouse && spouse.dynastyId && society.houses[spouse.dynastyId])
                   if (!character || !spouse || !house) {
+                    this.refundVanillaStatChanges()
                     this.openMatchmaker({ characterId })
                     return
                   }
                   character.id = character.id || characterId
                   spouse.id = spouse.id || spouseId
                   cost = Math.max(0, Math.round(parseFloat(cost || this.matchmakerCandidateCost(spouse, house, state))))
-                  if (house.stratum === 'poor' || this.isSlaveCharacter(spouse, house) || !this.isMarriageEligible(character, state) || !this.isMarriageEligible(spouse, state) || !this.isMarriageCompatible(character, spouse, state) || parseFloat(((state || {}).current || {}).cash || 0) < cost) {
+                  if (house.stratum === 'poor' || this.isSlaveCharacter(spouse, house) || !this.isMarriageEligible(character, state) || !this.isMarriageEligible(spouse, state) || !this.isMarriageCompatible(character, spouse, state) || this.cashBeforeClick(state) < cost) {
+                    this.refundVanillaStatChanges()
                     this.pushModal({
                       societyMenu: true,
                       title: 'Match no longer valid',
