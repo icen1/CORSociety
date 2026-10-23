@@ -18,6 +18,7 @@
       // - dictator / emperor get traits, a status badge and monthly influence and prestige;
       // - legions and clients pay monthly influence (legions also prestige) with badges; campaigns
       //   declare or join the game's war; victories, triumphs and acclamations give real traits;
+      // - cognomina show in the name, adoption is a real adoption, priesthoods are real jobs;
       // - political cash costs follow inflation: the median house wealth / 12,000 (0.5x-4x).
       // replaces: openCursus, standForOffice, buyVotes (offices now go through the game's elections)
       let previousPoliticsAction = window.corSociety.politicsAction
@@ -26,6 +27,9 @@
       let previousCampaignExterior = window.corSociety.campaignExterior
       let previousHoldTriumph = window.corSociety.holdTriumph
       let previousMilitaryAcclamation = window.corSociety.militaryAcclamation
+      let previousAwardCognomen = window.corSociety._awardCognomenSilent
+      let previousAdoptHeir = window.corSociety.adoptHeir
+      let previousSeekPriesthood = window.corSociety.seekPriesthood
       let previousUpkeep = window.corSociety.simulateClientelaAndLegionUpkeep
       Object.assign(window.corSociety, {
         politicalTraitDefinitions() {
@@ -247,7 +251,29 @@
           let clients = Math.max(0, Math.round(pp.clients || 0))
           this.setSocietyStatus(currentId, 'cor_society_clients_status', clients ? 'Clients: ' + clients : '', this.affairIcon('support'), player)
           this.setSocietyIncome('influence', 'cor_society_clients', Math.floor(clients / 4), ' - Roman Society: clientela', state, force)
+          if (player.corSocietyAgnomen && String(player.agnomen || '').indexOf(player.corSocietyAgnomen) < 0) {
+            this.setGameAgnomen(currentId, player.corSocietyAgnomen)
+          }
           return true
+        },
+        setGameAgnomen(characterId, name) {
+          // The game shows a name's honorific in its own `agnomen` field.
+          let character = daapi.getCharacter({ characterId })
+          if (!character || !name) return false
+          let existing = String(character.agnomen || '').trim()
+          if (existing.split(/\s+/).indexOf(name) >= 0) return false
+          try {
+            daapi.updateCharacter({ characterId, character: { agnomen: existing ? existing + ' ' + name : name } })
+            return true
+          } catch (err) {
+            console.warn(err)
+            return false
+          }
+        },
+        _awardCognomenSilent(society, state) {
+          let name = previousAwardCognomen.call(this, society, state)
+          this.setGameAgnomen(this.currentCharacterId(state || daapi.getState()), name)
+          return name
         },
         campaignExterior(args) {
           // A foreign campaign is fought in the game's own war: declare one if Rome is at peace,
@@ -290,6 +316,83 @@
           if (after && after !== before) {
             this.installPoliticalTraitDefinitions()
             this.grantGameTrait(currentId, 'corSocietyImperatorAcclaimed')
+          }
+          return result
+        },
+        adoptHeir(args) {
+          // The Society only recorded the choice; a Roman adoption makes the adoptee the adopter's
+          // child: they join the player's dynasty and household and become the game's heir.
+          args = args || {}
+          let result = previousAdoptHeir.call(this, args)
+          let rome = (this.load().rome) || {}
+          if (args.characterId && String(rome.designatedHeirId || '') === String(args.characterId)) {
+            this.adoptIntoPlayerFamily(args.characterId)
+          }
+          return result
+        },
+        adoptIntoPlayerFamily(characterId) {
+          let state = daapi.getState()
+          let currentId = this.currentCharacterId(state)
+          let player = state.characters[currentId]
+          let adoptee = state.characters[characterId]
+          if (!player || !adoptee || adoptee.isDead || adoptee.corSocietySlave || String(characterId) === String(currentId)) {
+            return false
+          }
+          let playerIsMale = player.gender ? player.gender === 'male' : player.isMale !== false
+          let spouse = player.spouseId && state.characters[player.spouseId] && !state.characters[player.spouseId].isDead ? player.spouseId : ''
+          let without = (list) => (list || []).filter((id) => String(id) !== String(characterId))
+          try {
+            ;[adoptee.fatherId, adoptee.motherId].forEach((parentId) => {
+              let parent = parentId && state.characters[parentId]
+              if (parent && String(parentId) !== String(currentId) && String(parentId) !== String(spouse)) {
+                daapi.updateCharacter({ characterId: parentId, character: { childrenIds: without(parent.childrenIds) } })
+              }
+            })
+            let patch = {
+              dynastyId: player.dynastyId,
+              corSocietyHouseId: player.dynastyId,
+              flagIsAdopted: true,
+              hasMovedOut: false,
+              corSocietyBirthFatherId: adoptee.fatherId || '',
+              corSocietyBirthMotherId: adoptee.motherId || ''
+            }
+            patch[playerIsMale ? 'fatherId' : 'motherId'] = currentId
+            patch[playerIsMale ? 'motherId' : 'fatherId'] = spouse || null
+            daapi.updateCharacter({ characterId, character: patch })
+            daapi.updateCharacter({ characterId: currentId, character: { childrenIds: without(player.childrenIds).concat([characterId]) } })
+            if (spouse) {
+              daapi.updateCharacter({ characterId: spouse, character: { childrenIds: without(state.characters[spouse].childrenIds).concat([characterId]) } })
+            }
+            if (typeof daapi.refreshHouseholdCharactersList === 'function') {
+              daapi.refreshHouseholdCharactersList()
+            }
+            this.invokeGameMethod({ event: 'lifeAndDeath/designateHeir', method: 'process', context: { characterId } })
+          } catch (err) {
+            console.warn(err)
+            return false
+          }
+          let society = this.load()
+          this.log(society, this.characterName(Object.assign({}, adoptee, { id: characterId }), state) + ' is adopted into your family and named your heir.', 'familyTree', this.currentCharacterDynastyId(state))
+          this.save(society)
+          return true
+        },
+        seekPriesthood(args) {
+          // The game has appointed priesthoods (augur, flamen, epulo) as real jobs, but no
+          // pontifex election, so the Society's priesthood becomes one of those when the
+          // character has no other office.
+          let state = daapi.getState()
+          let currentId = this.currentCharacterId(state)
+          let player = state.characters[currentId]
+          let result = previousSeekPriesthood.call(this, args)
+          if (player && !player.job && typeof daapi.setCharacterJob === 'function') {
+            let rome = (this.load().rome) || {}
+            let held = (rome.priesthoods || {})[currentId]
+            let job = held === 'augur' ? 'augures' : this.pick(['flamens', 'epulones'])
+            try {
+              daapi.setCharacterJob({ characterId: currentId, job, jobLevel: 0 })
+            } catch (err) {
+              console.warn(err)
+            }
           }
           return result
         },
