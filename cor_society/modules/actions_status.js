@@ -1979,7 +1979,9 @@
         actionCost(house, type) {
                   let profile = this.strata[house.stratum] || this.strata.plebeian
                   let state = daapi.getState()
-                  let cash = Math.max(0, parseFloat((state.current && state.current.cash) || 0))
+                  // Inside an action the game has already taken the previewed cost: price it from the
+                  // cash before the click, so the charge matches the preview.
+                  let cash = Math.max(0, this.cashBeforeClick(state))
                   let level = this.socialLevel(house.stratum)
                   let floors = [8, 12, 18, 32, 55, 90]
                   let baseFloor = floors[level] || 18
