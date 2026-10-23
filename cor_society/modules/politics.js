@@ -159,10 +159,12 @@
                   fromHouse.ai = fromHouse.ai || {}
                   fromHouse.ai.propertyDetails = fromHouse.ai.propertyDetails || {}
                   let have = Math.round(parseFloat(fromHouse.ai.propertyDetails[key] || 0))
-                  amount = Math.max(1, Math.min(parseInt(amount || 1, 10), have))
-                  if (amount <= 0) {
+                  if (have <= 0) {
+                    // Nothing left to take (a menu left open while the month moved on): moving 1 unit
+                    // anyway created the property out of nothing.
                     return 0
                   }
+                  amount = Math.max(1, Math.min(parseInt(amount || 1, 10), have))
                   fromHouse.ai.propertyDetails[key] = have - amount
                   if (fromHouse.ai.propertyDetails[key] <= 0) {
                     delete fromHouse.ai.propertyDetails[key]
