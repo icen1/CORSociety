@@ -12,6 +12,7 @@
       }
       Object.assign(window.corSociety, {
         openHub() {
+                  this._houseReturn = null
                   let state = daapi.getState()
                   let society = this.ensure()
                   let counts = this.countByStratum(society)
@@ -818,6 +819,15 @@
                   if (!house) {
                     this.openHub()
                     return
+                  }
+                  // House and person actions reopen the house with only its id. Keep the list it was
+                  // entered from (Allies, Rivals, a dynasty), so Back still returns there instead of
+                  // the house's stratum list. Memory only; openHub forgets it.
+                  if (returnTo) {
+                    this._houseReturn = { houseId: String(houseId), returnTo, returnPage }
+                  } else if (this._houseReturn && this._houseReturn.houseId === String(houseId)) {
+                    returnTo = this._houseReturn.returnTo
+                    returnPage = this._houseReturn.returnPage
                   }
                   let profile = this.strata[house.stratum] || this.strata.plebeian
                   let cash = parseFloat((state.current || {}).cash || 0)
