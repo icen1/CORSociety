@@ -52,6 +52,89 @@
             this.log(society, repaired + ' characters had an invalid dynasty (a house id) and were repaired.', 'log', '')
           }
           return repaired
+        },
+        repairInflatedHouses(society, state) {
+          // Step 4. aiSellExcessProperty used to pay a house for property above its management limit
+          // without removing it (normalizeHousePropertyDetails replaced the object mid-sale), so a
+          // house whose stewardship fell below its holdings minted cash every turn and bought more
+          // property with it, reaching millions in cash and billions in property. For every house
+          // except the player's:
+          // - property above the management limits worth more than the house's max cash holding is
+          //   cut to the limits without payment (the economy would otherwise sell it for cash);
+          //   honest houses never hold such an excess, the economy sells it every turn;
+          // - cash above 10x the max cash holding (honest income cannot get there) is reset to that
+          //   holding, at least the median of the honest houses of its order;
+          // - a house caught by either rule that is still richer than the richest honest house of its
+          //   order is trimmed to that wealth, keeping a proportional share of each holding type.
+          // Wealth is recomputed and strength set to the level the monthly formula settles at.
+          if (!society || !society.houses || !this.houseEffectiveMaxCashHolding || !this.housePropertyValue || !this.housePropertyMaxCount) {
+            return 0
+          }
+          state = state || daapi.getState()
+          let types = this.vanillaPropertyTypes ? this.vanillaPropertyTypes() : {}
+          let houses = Object.keys(society.houses).map((houseId) => society.houses[houseId]).filter((house) => house && house.ai && !(this.isPlayerHouseRecord && this.isPlayerHouseRecord(house, state)))
+          let median = (list) => {
+            let sorted = list.slice().sort((a, b) => a - b)
+            return sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0
+          }
+          let flagged = []
+          houses.forEach((house) => {
+            let details = this.normalizeHousePropertyDetails(house)
+            let holding = Math.max(this.houseEffectiveMaxCashHolding(house, state), 1000)
+            let overValue = 0
+            let limits = {}
+            Object.keys(details).forEach((key) => {
+              limits[key] = Math.max(0, Math.floor(this.housePropertyMaxCount(house, key, state)))
+              overValue += Math.max(0, details[key] - limits[key]) * ((types[key] && types[key].value) || 0)
+            })
+            let property = overValue > holding
+            let cash = parseFloat(house.ai.cash || 0) > 10 * holding
+            if (!property && !cash) {
+              return
+            }
+            if (property) {
+              Object.keys(limits).forEach((key) => {
+                details[key] = Math.min(details[key], limits[key])
+              })
+              this.normalizeHousePropertyDetails(house)
+            }
+            flagged.push({ house, cash, holding })
+          })
+          if (!flagged.length) {
+            return 0
+          }
+          let isFlagged = new Set(flagged.map((item) => item.house))
+          let honestCash = {}
+          let honestCeiling = {}
+          houses.forEach((house) => {
+            if (isFlagged.has(house)) return
+            let wealth = parseFloat(house.ai.cash || 0) + this.housePropertyValue(house)
+            honestCash[house.stratum] = honestCash[house.stratum] || []
+            honestCash[house.stratum].push(parseFloat(house.ai.cash || 0))
+            honestCeiling[house.stratum] = Math.max(honestCeiling[house.stratum] || 0, wealth)
+          })
+          let anyCeiling = Math.max(0, ...Object.keys(honestCeiling).map((key) => honestCeiling[key]))
+          flagged.forEach(({ house, cash, holding }) => {
+            if (cash) {
+              house.ai.cash = Math.round(Math.max(holding, median(honestCash[house.stratum] || [])))
+            }
+            let ceiling = honestCeiling[house.stratum] || anyCeiling
+            let propertyValue = this.housePropertyValue(house)
+            if (ceiling > 0 && parseFloat(house.ai.cash || 0) + propertyValue > ceiling) {
+              house.ai.cash = Math.round(Math.min(parseFloat(house.ai.cash || 0), ceiling))
+              let room = Math.max(0, ceiling - house.ai.cash)
+              let factor = propertyValue > 0 ? Math.min(1, room / propertyValue) : 0
+              let details = this.normalizeHousePropertyDetails(house)
+              Object.keys(details).forEach((key) => {
+                details[key] = Math.floor(details[key] * factor)
+              })
+              this.normalizeHousePropertyDetails(house)
+            }
+            house.wealth = Math.max(0, Math.round(house.ai.cash + this.housePropertyValue(house)))
+            house.strength = Math.max(1, Math.round(((house.power || 0) * 0.25 + house.wealth / 160 + (house.stability || 0) / 8) / 0.15))
+            this.log(society, (house.name || 'A house') + '\'s treasury and estates, swollen by a scribe\'s accounting error, are restored to an honest measure.', 'log', house.id)
+          })
+          return flagged.length
         }
       })
       window.corSociety._mixinCorSocietyMigrationsVersion = '1.1.331'
