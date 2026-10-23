@@ -546,16 +546,22 @@
                     return {}
                   }
                   let types = this.vanillaPropertyTypes()
-                  let details = house.ai.propertyDetails || this.seedHousePropertyDetails(house)
-                  let clean = {}
-                  Object.keys(details || {}).forEach((key) => {
-                    if (!types[key]) return
-                    let count = Math.max(0, Math.round(parseFloat(details[key] || 0)))
-                    if (count) clean[key] = count
+                  // Cleaned in place, never replaced: callers keep this object across calls that
+                  // normalise again (aiSellExcessProperty -> housePropertyMaxCount -> stewardship ->
+                  // property class -> here). Swapping it made sales pay while the house kept the
+                  // property, minting cash every turn, and made purchases vanish.
+                  let details = house.ai.propertyDetails || this.seedHousePropertyDetails(house) || {}
+                  Object.keys(details).forEach((key) => {
+                    let count = types[key] ? Math.max(0, Math.round(parseFloat(details[key] || 0))) : 0
+                    if (count) {
+                      details[key] = count
+                    } else {
+                      delete details[key]
+                    }
                   })
-                  house.ai.propertyDetails = clean
+                  house.ai.propertyDetails = details
                   this.syncAggregateHouseProperty(house)
-                  return clean
+                  return details
                 },
         syncAggregateHouseProperty(house) {
                   let details = (house && house.ai && house.ai.propertyDetails) || {}
