@@ -4299,8 +4299,9 @@
                   }
                   amount = Math.min(principal, amount)
                   let total = interest + amount
-                  let cash = parseFloat(((state || {}).current || {}).cash || 0)
+                  let cash = this.cashBeforeClick(state)
                   if (total <= 0 || cash < total) {
+                    this.refundVanillaStatChanges()
                     this.pushModal({
                       societyMenu: true,
                       title: 'Bank payment unavailable',
@@ -4950,7 +4951,8 @@
                   // corSocietySlaveActive:false, so the slave gets purged on the next monthly tick.
                   template = { ...template, market: false }
                   cost = Math.max(1, Math.round(parseFloat(cost || this.slaveCost(template))))
-                  if (parseFloat(((state || {}).current || {}).cash || 0) < cost) {
+                  if (this.cashBeforeClick(state) < cost) {
+                    this.refundVanillaStatChanges()
                     this.openSlaveMarket()
                     return
                   }
@@ -5332,6 +5334,7 @@
                   let record = (society.playerSlaves || []).find((slave) => (slaveKey && slave.key === slaveKey) || (characterId && this.sameCharacterId(slave.characterId, characterId)))
                   let character = record && record.characterId && state.characters && state.characters[record.characterId]
                   if (!record || !character || character.corSocietyOrigin !== 'private_company_bastard') {
+                    this.refundVanillaStatChanges()
                     this.openHouseholdSlaves()
                     return
                   }
@@ -5340,13 +5343,15 @@
                   let fatherId = character.corSocietyTrueFatherId || character.fatherId
                   let father = fatherId && state.characters && state.characters[fatherId]
                   if (!father || father.corSocietySlave || father.dynastyId !== currentDynastyId) {
+                    this.refundVanillaStatChanges()
                     this.openManageSlave({ slaveKey: record.key, characterId: record.characterId })
                     return
                   }
                   father.id = father.id || fatherId
                   cost = Math.max(0, Math.round(parseFloat(cost || Math.max(25, this.slaveFreedomPrice(record) * 0.6))))
-                  let cash = parseFloat(((state || {}).current || {}).cash || 0)
+                  let cash = this.cashBeforeClick(state)
                   if (cash < cost) {
+                    this.refundVanillaStatChanges()
                     this.openManageSlave({ slaveKey: record.key, characterId: record.characterId })
                     return
                   }

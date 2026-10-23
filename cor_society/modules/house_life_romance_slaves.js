@@ -1942,12 +1942,14 @@
                   let state = daapi.getState()
                   let loan = (society.privateLoans || []).find((item) => item && item.id === loanId && item.status === 'active' && String(item.borrowerHouseId || '') === 'player')
                   if (!loan) {
+                    this.refundVanillaStatChanges()
                     this.openPrivateLoans()
                     return
                   }
                   let totals = this.playerPrivateLoanTotals(loan)
-                  let cash = parseFloat(((state || {}).current || {}).cash || 0)
+                  let cash = this.cashBeforeClick(state)
                   if (cash < totals.total) {
+                    this.refundVanillaStatChanges()
                     this.openPrivateLoans()
                     return
                   }
@@ -1994,6 +1996,7 @@
                   let state = daapi.getState()
                   let loan = (society.privateLoans || []).find((item) => item && item.id === loanId && item.status === 'active' && String(item.borrowerHouseId || '') === 'player')
                   if (!loan) {
+                    this.refundVanillaStatChanges()
                     this.openPrivateLoans()
                     return
                   }

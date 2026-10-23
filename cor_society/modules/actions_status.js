@@ -341,7 +341,7 @@
                   let type = this.slaveTypeFromCharacter(character)
                   let visible = !!(character && (this.isSlaveCharacter(character, house) || (house && house.stratum === 'poor' && (!currentDynastyId || String(character.dynastyId || '') !== String(currentDynastyId)))))
                   let cost = this.enslavedCharacterCost(society, state, house, character)
-                  let cash = parseFloat(((state || {}).current || {}).cash || 0)
+                  let cash = this.cashBeforeClick(state)
                   let reason = ''
                   if (!visible) reason = 'not enslaved'
                   else if (character.isDead) reason = 'dead'
@@ -400,13 +400,15 @@
                   let house = society.houses[houseId]
                   let character = state.characters && state.characters[characterId]
                   if (!house || !character) {
+                    this.refundVanillaStatChanges()
                     this.openSlaveMarket()
                     return
                   }
                   character.id = character.id || characterId
                   let info = this.enslavedPurchaseInfo(society, state, house, character)
                   cost = Math.max(1, Math.round(parseFloat(cost || info.cost)))
-                  if (!info.available || parseFloat(((state || {}).current || {}).cash || 0) < cost) {
+                  if (!info.available || this.cashBeforeClick(state) < cost) {
+                    this.refundVanillaStatChanges()
                     this.pushModal({
                       societyMenu: true,
                       title: 'Purchase unavailable',
@@ -484,13 +486,15 @@
                   let house = society.houses[houseId]
                   let character = state.characters && state.characters[characterId]
                   if (!house || !character) {
+                    this.refundVanillaStatChanges()
                     this.openHub()
                     return
                   }
                   character.id = character.id || characterId
                   let info = this.enslavedPurchaseInfo(society, state, house, character)
                   cost = Math.max(1, Math.round(parseFloat(cost || Math.max(35, info.cost * 0.45))))
-                  if (!info.visible || parseFloat(((state || {}).current || {}).cash || 0) < cost) {
+                  if (!info.visible || this.cashBeforeClick(state) < cost) {
+                    this.refundVanillaStatChanges()
                     this.pushModal({
                       societyMenu: true,
                       title: 'Capture unavailable',
@@ -670,13 +674,15 @@
                   let spouse = state.characters && state.characters[spouseId]
                   let house = society.houses[houseId] || (spouse && spouse.dynastyId && society.houses[spouse.dynastyId])
                   if (!character || !spouse || !house) {
+                    this.refundVanillaStatChanges()
                     this.openMatchmaker({ characterId })
                     return
                   }
                   character.id = character.id || characterId
                   spouse.id = spouse.id || spouseId
                   cost = Math.max(0, Math.round(parseFloat(cost || this.matchmakerCandidateCost(spouse, house, state))))
-                  if (house.stratum === 'poor' || this.isSlaveCharacter(spouse, house) || !this.isMarriageEligible(character, state) || !this.isMarriageEligible(spouse, state) || !this.isMarriageCompatible(character, spouse, state) || parseFloat(((state || {}).current || {}).cash || 0) < cost) {
+                  if (house.stratum === 'poor' || this.isSlaveCharacter(spouse, house) || !this.isMarriageEligible(character, state) || !this.isMarriageEligible(spouse, state) || !this.isMarriageCompatible(character, spouse, state) || this.cashBeforeClick(state) < cost) {
+                    this.refundVanillaStatChanges()
                     this.pushModal({
                       societyMenu: true,
                       title: 'Match no longer valid',
@@ -797,10 +803,12 @@
                   let state = daapi.getState()
                   let house = society.houses && society.houses[houseId]
                   if (!house || !this.isCurrentPlayerHouse(house, state)) {
+                    this.refundVanillaStatChanges()
                     this.openHouse({ houseId })
                     return
                   }
                   if (house.nextFamilyCouncilMonth && !this.monthKeyReached(house.nextFamilyCouncilMonth, state)) {
+                    this.refundVanillaStatChanges()
                     this.openHouse({ houseId })
                     return
                   }
@@ -824,12 +832,14 @@
                   let state = daapi.getState()
                   let house = society.houses && society.houses[houseId]
                   if (!house || !this.isCurrentPlayerHouse(house, state)) {
+                    this.refundVanillaStatChanges()
                     this.openHouse({ houseId })
                     return
                   }
                   cost = Math.max(20, Math.round(parseFloat(cost || this.actionCost(house, 'dinner') * 0.45)))
-                  let cash = parseFloat(((state || {}).current || {}).cash || 0)
+                  let cash = this.cashBeforeClick(state)
                   if ((house.nextHouseholdRitesMonth && !this.monthKeyReached(house.nextHouseholdRitesMonth, state)) || cash < cost) {
+                    this.refundVanillaStatChanges()
                     this.openHouse({ houseId })
                     return
                   }
@@ -1977,7 +1987,9 @@
         actionCost(house, type) {
                   let profile = this.strata[house.stratum] || this.strata.plebeian
                   let state = daapi.getState()
-                  let cash = Math.max(0, parseFloat((state.current && state.current.cash) || 0))
+                  // Inside an action the game has already taken the previewed cost: price it from the
+                  // cash before the click, so the charge matches the preview.
+                  let cash = Math.max(0, this.cashBeforeClick(state))
                   let level = this.socialLevel(house.stratum)
                   let floors = [8, 12, 18, 32, 55, 90]
                   let baseFloor = floors[level] || 18
@@ -2048,6 +2060,36 @@
                       prestige: stats.prestige || 0
                     })
                   }
+                },
+        cashBeforeClick(state) {
+                  // On a modal click the game applies the option's previewed statChanges before the
+                  // action runs, so current cash is already net of the cost. Affordability checks
+                  // inside an action must add that back, or a player with 1-2x the cost pays and is
+                  // refused.
+                  let cash = parseFloat(((state || {}).current || {}).cash || 0)
+                  let applied = this._currentVanillaStatChanges || {}
+                  return cash - parseFloat(applied.cash || 0)
+                },
+        refundVanillaStatChanges() {
+                  // The action refused after the game had already applied its previewed stats: give
+                  // them back. Returns true if anything was refunded.
+                  let applied = this._currentVanillaStatChanges
+                  if (!applied) {
+                    return false
+                  }
+                  let refund = {}
+                  ;['cash', 'influence', 'prestige'].forEach((key) => {
+                    let value = parseFloat(applied[key] || 0)
+                    if (value) {
+                      refund[key] = -value
+                    }
+                    applied[key] = 0
+                  })
+                  if (!Object.keys(refund).length) {
+                    return false
+                  }
+                  this.applyStats(refund)
+                  return true
                 },
         runAction(method, args) {
                   args = args || {}
