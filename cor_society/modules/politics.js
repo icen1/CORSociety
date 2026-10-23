@@ -1649,19 +1649,22 @@
                       keptCaptives.push(captive)
                     })
                     society.captives = keptCaptives
-                    // NPC-vs-NPC land feud flavour (bounded).
+                    // NPC-vs-NPC property feud (bounded): the stronger house really takes one holding
+                    // (wealth alone would be recomputed from cash + property on the next house turn),
+                    // and the two houses fall out. Never involves the player's house.
                     if (Math.random() < 0.25) {
-                      let houses = this.sortedHouses(society).filter((h) => h && !h.isPlayerHouse)
+                      let houses = this.sortedHouses(society).filter((h) => h && !h.isPlayerHouse && !this.isPlayerHouseRecord(h, state))
                       if (houses.length >= 2) {
                         let aggressor = houses[this.randomInt(0, Math.min(4, houses.length - 1))]
                         let victim = this.pick(houses.filter((h) => String(h.id) !== String(aggressor.id)))
-                        if (aggressor && victim && (aggressor.power || 0) > (victim.power || 0)) {
-                          let seized = Math.max(15, Math.round((victim.wealth || 150) * 0.08))
-                          victim.wealth = Math.max(0, Math.round((victim.wealth || 0) - seized))
-                          aggressor.wealth = (aggressor.wealth || 0) + Math.round(seized * 0.6)
-                          victim.relation = this.clamp((victim.relation || 0), -100, 100)
-                          this.log(society, aggressor.name + ' seizes ' + this.romanPlace('estate') + ' from ' + victim.name + ' in a property feud.', 'rivalry', victim.id)
-                          changed = true
+                        let holdings = victim ? this.housePropertyOptions(victim) : []
+                        if (aggressor && victim && holdings.length && (aggressor.power || 0) > (victim.power || 0)) {
+                          let holding = this.pick(holdings)
+                          if (this.transferPropertyBetweenHouses(victim, aggressor, holding.key, 1)) {
+                            this.changeHouseRelation(society, aggressor.id, victim.id, -this.randomInt(10, 20))
+                            this.log(society, aggressor.name + ' seizes ' + (holding.title || 'property') + ' at ' + this.romanPlace('estate') + ' from ' + victim.name + ' in a property feud.', 'rivalry', victim.id)
+                            changed = true
+                          }
                         }
                       }
                     }
