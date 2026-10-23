@@ -21,6 +21,7 @@
   '/cor_society/modules/diagnostics',
   '/cor_society/modules/population',
   '/cor_society/modules/family',
+  '/cor_society/modules/politics_integration',
   '/cor_society/character_actions',
   '/cor_society/main',
   '/cor_society/bundled/play_as/main',

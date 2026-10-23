@@ -1333,8 +1333,8 @@
           this.ensureAdvancedRomanState(society, state)
           let pp = society.playerPolitics
           let options = [
-            this.politicsButton('fundClientela', 'Distribute sportulae (60 cash, +clients)', 'coins', {}, { tooltip: 'Daily patronage payments grow your clientela and improve lower-order relations.' }),
-            this.politicsButton('holdClientGames', 'Hold ludi and games (140 cash)', 'prestige', {}, { tooltip: 'Public games add clients, popularity, and prestige, but may look demagogic to elites.' })
+            this.politicsButton('fundClientela', 'Distribute sportulae (' + (this.politicalPrice ? this.politicalPrice(60) : 60) + ' cash, +clients)', 'coins', {}, { tooltip: 'Daily patronage payments grow your clientela and improve lower-order relations.' }),
+            this.politicsButton('holdClientGames', 'Hold ludi and games (' + (this.politicalPrice ? this.politicalPrice(140) : 140) + ' cash)', 'prestige', {}, { tooltip: 'Public games add clients, popularity, and prestige, but may look demagogic to elites.' })
           ]
           options.push({ text: 'Back', action: { event: this.event, method: 'politicsAction', context: { action: 'openRomanPower' } } })
           this.pushModal({
@@ -1485,7 +1485,7 @@
             acclamationButton = this.politicsButton('militaryAcclamation', 'Seek military acclamation as Imperator', 'dictator', {}, { tooltip: 'Alternative path to Empire. Requires at least 2 allied houses and 1 loyal legion; triggers a multi-month civil war.' })
           }
           let options = [
-            this.politicsButton('raiseLegion', 'Raise a loyal legion (220 cash, 20 clients)', 'rivalry', {}, { tooltip: 'Creates a personal legion with strength and loyalty. Upkeep is checked monthly.' }),
+            this.politicsButton('raiseLegion', 'Raise a loyal legion (' + (this.politicalPrice ? this.politicalPrice(220) : 220) + ' cash, 20 clients)', 'rivalry', {}, { tooltip: 'Creates a personal legion with strength and loyalty. Upkeep is checked monthly.' }),
             this.politicsButton('campaignExterior', 'Campaign abroad', 'rivalry', {}, { tooltip: 'Uses loyal legions for booty, slaves, prestige, triumphs, and cognomina. Defeat hurts stability and can fuel coalitions.' }),
             this.politicsButton('holdTriumph', 'Hold triumph (requires victory)', 'prestige', {}, { tooltip: 'Spend victory claims for prestige, clients, and a cognomen.' }),
             acclamationButton
@@ -1655,7 +1655,7 @@
               options.push(this.politicsButton('leadDepositionCoalition', 'Attempt to lead deposition', 'dictator', {}, { tooltip: 'If your power is high enough, seize leadership and force an ultimatum or civil war.' }))
             }
             if (isEmperorNow) {
-              options.push(this.politicsButton('bribeCoalitionMember', 'Buy off conspirators (160 cash)', 'coins', {}, { tooltip: 'Reduce coalition strength by bribing or appointing a member.' }))
+              options.push(this.politicsButton('bribeCoalitionMember', 'Buy off conspirators (' + (this.politicalPrice ? this.politicalPrice(160) : 160) + ' cash)', 'coins', {}, { tooltip: 'Reduce coalition strength by bribing or appointing a member.' }))
               options.push(this.politicsButton('purgeCoalitionLeader', 'Purge coalition leader', 'prison', {}, { tooltip: 'Imperial justice against the leader. High tyranny and assassination risk.' }))
               options.push(this.politicsButton('concedeCoalition', 'Concede a popular law', 'support', {}, { tooltip: 'Lower discontent by accepting a policy or succession concession.' }))
               options.push(this.politicsButton('crushCoalition', 'Crush coalition militarily', 'war', {}, { tooltip: 'Use legions and loyal houses. Failure can depose or execute the emperor.' }))

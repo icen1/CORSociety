@@ -339,7 +339,9 @@
                   let options = houses.map((house) => {
                     let inFaction = (pp.faction || []).indexOf(house.id) >= 0
                     let cost = Math.max(20, Math.round((this.actionCost(house, 'dinner') || 40) * 1.4))
-                    return this.politicsButton('recruitFactionHouse', (inFaction ? '* ' : '') + house.name + ' (relation ' + this.signed(house.relation || 0) + ', cost ' + cost + ')', 'support', { houseId: house.id }, inFaction || cash < cost ? { disabled: true, showDisabledWithTooltip: true, tooltip: inFaction ? 'Already in your faction.' : 'Not enough cash (' + cost + ').' } : {})
+                    // the charge follows inflation (politicsAction), so the label and the check do too
+                    let price = this.politicalPrice ? this.politicalPrice(cost) : cost
+                    return this.politicsButton('recruitFactionHouse', (inFaction ? '* ' : '') + house.name + ' (relation ' + this.signed(house.relation || 0) + ', cost ' + price + ')', 'support', { houseId: house.id }, inFaction || cash < price ? { disabled: true, showDisabledWithTooltip: true, tooltip: inFaction ? 'Already in your faction.' : 'Not enough cash (' + price + ').' } : {})
                   })
                   options.push({ text: 'Back', action: { event: this.event, method: 'politicsAction', context: { action: 'openPolitics' } } })
                   this.pushModal({
@@ -418,7 +420,7 @@
                   let propSummary = props.length ? props.slice(0, 5).map((p) => p.count + 'x ' + p.title).join(', ') : 'no recorded estates'
                   let options = []
                   options.push(this.politicsButton('pressLandClaim', 'Press a land claim - seize a property (' + this.costLabel(claimCost) + ')', 'coins', { houseId }))
-                  options.push(this.politicsButton('raidProperty', 'Raid / blockade their estates (' + raidCost + ' cash)', 'trade', { houseId }))
+                  options.push(this.politicsButton('raidProperty', 'Raid / blockade their estates (' + (this.politicalPrice ? this.politicalPrice(raidCost) : raidCost) + ' cash)', 'trade', { houseId }))
                   options.push(this.politicsButton('openAbductTargets', 'Abduct a family member for ransom (' + this.costLabel(abductCost) + ')', 'scandal', { houseId }))
                   options.push({ text: 'Back', action: { event: this.event, method: 'politicsAction', context: { action: 'openRivalPolitics' } } })
                   this.pushModal({
@@ -907,7 +909,8 @@
                   if (faction < 5) return { ready: false, reason: 'You need at least 5 houses in your faction (have ' + faction + ').' }
                   if (auctoritas < 140) return { ready: false, reason: 'You need overwhelming auctoritas (have ' + auctoritas + ', need 140).' }
                   if (offices < 1) return { ready: false, reason: 'You must hold a Senate office to command imperium.' }
-                  if (cash < 300) return { ready: false, reason: 'You need a war chest of at least 300 cash for donatives.' }
+                  let warChest = (this.politicalPrice ? this.politicalPrice(300) : 300)
+                  if (cash < warChest) return { ready: false, reason: 'You need a war chest of at least ' + warChest + ' cash for donatives.' }
                   return { ready: true, reason: '' }
                 },
         attemptEmpire() {
