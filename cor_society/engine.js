@@ -47,6 +47,9 @@
         if (window.corSociety.syncInheritanceEligibility) {
           window.corSociety.syncInheritanceEligibility()
         }
+        if (window.corSociety.installPoliticsGuards) {
+          window.corSociety.installPoliticsGuards()
+        }
         window.corSociety.installDebugConsoleCommand()
         window.corSociety.installDebtSaleModalPatch()
         window.corSociety.registerPlayerEntryActions()
@@ -77,6 +80,9 @@
       }
       if (window.corSociety.syncInheritanceEligibility) {
         window.corSociety.syncInheritanceEligibility()
+      }
+      if (window.corSociety.installPoliticsGuards) {
+        window.corSociety.installPoliticsGuards()
       }
       window.corSociety.ensure()
       window.corSociety.installDebugConsoleCommand()
