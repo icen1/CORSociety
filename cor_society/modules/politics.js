@@ -147,28 +147,32 @@
         transferPropertyToPlayer(society, state, targetHouse, key, amount) {
                   // Remove a real vanilla property from the rival house's holdings and grant it to the
                   // player's house (a genuine transfer between houses), returning the value moved.
-                  if (!targetHouse || !key) {
+                  return this.transferPropertyBetweenHouses(targetHouse, this.playerPoliticsHouse(society, state), key, amount)
+                },
+        transferPropertyBetweenHouses(fromHouse, toHouse, key, amount) {
+                  // Move `amount` units of a real vanilla property from one house's holdings to another
+                  // (toHouse may be missing: the property is then just lost). Returns the value moved.
+                  if (!fromHouse || !key) {
                     return 0
                   }
-                  this.normalizeHousePropertyDetails(targetHouse)
-                  targetHouse.ai = targetHouse.ai || {}
-                  targetHouse.ai.propertyDetails = targetHouse.ai.propertyDetails || {}
-                  let have = Math.round(parseFloat(targetHouse.ai.propertyDetails[key] || 0))
+                  this.normalizeHousePropertyDetails(fromHouse)
+                  fromHouse.ai = fromHouse.ai || {}
+                  fromHouse.ai.propertyDetails = fromHouse.ai.propertyDetails || {}
+                  let have = Math.round(parseFloat(fromHouse.ai.propertyDetails[key] || 0))
                   amount = Math.max(1, Math.min(parseInt(amount || 1, 10), have))
                   if (amount <= 0) {
                     return 0
                   }
-                  targetHouse.ai.propertyDetails[key] = have - amount
-                  if (targetHouse.ai.propertyDetails[key] <= 0) {
-                    delete targetHouse.ai.propertyDetails[key]
+                  fromHouse.ai.propertyDetails[key] = have - amount
+                  if (fromHouse.ai.propertyDetails[key] <= 0) {
+                    delete fromHouse.ai.propertyDetails[key]
                   }
-                  this.normalizeHousePropertyDetails(targetHouse)
-                  let playerHouse = this.playerPoliticsHouse(society, state)
-                  if (playerHouse) {
-                    playerHouse.ai = playerHouse.ai || {}
-                    playerHouse.ai.propertyDetails = playerHouse.ai.propertyDetails || {}
-                    playerHouse.ai.propertyDetails[key] = Math.round(parseFloat(playerHouse.ai.propertyDetails[key] || 0)) + amount
-                    this.normalizeHousePropertyDetails(playerHouse)
+                  this.normalizeHousePropertyDetails(fromHouse)
+                  if (toHouse) {
+                    toHouse.ai = toHouse.ai || {}
+                    toHouse.ai.propertyDetails = toHouse.ai.propertyDetails || {}
+                    toHouse.ai.propertyDetails[key] = Math.round(parseFloat(toHouse.ai.propertyDetails[key] || 0)) + amount
+                    this.normalizeHousePropertyDetails(toHouse)
                   }
                   let types = this.vanillaPropertyTypes ? this.vanillaPropertyTypes() : {}
                   return Math.round(((types[key] && types[key].value) || 0) * amount)
