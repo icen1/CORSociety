@@ -638,10 +638,34 @@
                     if (!character) return
                     if (character.corSocietyHouseId && String(character.corSocietyHouseId) === String(house.id)) add(id)
                   })
+                  // Every living character whose house pointer names this house, from all records:
+                  // the generated window above keeps only the last 420 ids, so a living member who
+                  // dropped off the house's own lists was never found again and the house looked
+                  // empty. Callers still check each id with resolveCharacterHouseId.
+                  this.livingCharactersPointingToHouse(state, house.id).forEach(add)
                   if (house.isPlayerHouse && this.playerFamilyMemberIds) {
                     this.playerFamilyMemberIds(state).forEach(add)
                   }
                   return ids
+                },
+        livingCharactersPointingToHouse(state, houseId) {
+                  // corSocietyHouseId -> living character ids, built once per state copy.
+                  let characters = (state && state.characters) || {}
+                  this._housePointerIndex = this._housePointerIndex || new WeakMap()
+                  let index = this._housePointerIndex.get(characters)
+                  if (!index) {
+                    index = {}
+                    Object.keys(characters).forEach((id) => {
+                      let character = characters[id]
+                      let pointer = character && !character.isDead && character.corSocietyHouseId
+                      if (pointer) {
+                        index[String(pointer)] = index[String(pointer)] || []
+                        index[String(pointer)].push(id)
+                      }
+                    })
+                    this._housePointerIndex.set(characters, index)
+                  }
+                  return index[String(houseId)] || []
                 },
         resolvedHouseMemberIds(society, state, house, options) {
                   if (!society || !state || !state.characters || !house) {
