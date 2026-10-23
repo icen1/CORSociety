@@ -1977,6 +1977,7 @@
                   let state = daapi.getState()
                   let loan = (society.privateLoans || []).find((item) => item && item.id === loanId && item.status === 'active' && String(item.borrowerHouseId || '') === 'player')
                   if (!loan) {
+                    this.refundVanillaStatChanges()
                     this.openPrivateLoans()
                     return
                   }
