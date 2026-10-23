@@ -33,7 +33,8 @@
             '/cor_society/modules/technical_safety',
             '/cor_society/modules/roman_systems',
             '/cor_society/modules/diagnostics',
-            '/cor_society/modules/population'
+            '/cor_society/modules/population',
+            '/cor_society/modules/family'
           ]
         },
         moduleMixinManifest() {
@@ -57,7 +58,8 @@
             { event: '/cor_society/modules/technical_safety', method: '_mixinCorSocietyTechnicalSafety' },
             { event: '/cor_society/modules/roman_systems', method: '_mixinCorSocietyRomanSystems' },
             { event: '/cor_society/modules/diagnostics', method: '_mixinCorSocietyDiagnostics' },
-            { event: '/cor_society/modules/population', method: '_mixinCorSocietyPopulation' }
+            { event: '/cor_society/modules/population', method: '_mixinCorSocietyPopulation' },
+            { event: '/cor_society/modules/family', method: '_mixinCorSocietyFamily' }
           ]
         }
       })

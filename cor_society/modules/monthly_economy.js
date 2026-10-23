@@ -67,6 +67,9 @@
                     step('repairPlayerFamilyHouseAssignment', () => this.repairPlayerFamilyHouseAssignment(society, state))
                     refresh()
                     step('syncPlayerWorldEffects', () => this.syncPlayerWorldEffects(society, state))
+                    if (this.syncInheritanceEligibility) {
+                      step('syncInheritanceEligibility', () => this.syncInheritanceEligibility(daapi.getState()))
+                    }
                     step('repairFalsePlayerSlaveFlags', () => this.repairFalsePlayerSlaveFlags(society, state))
                     step('syncPlayerHouseRecord', () => this.syncPlayerHouseRecord(society, state))
                     step('repairDynastyHouseSystem', () => this.repairDynastyHouseSystem(society, state))
