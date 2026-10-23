@@ -15,6 +15,8 @@
       // reached the game: no job, trait, status, income or season. Here:
       // - the cursus runs through the game's own elections (months 10-12, its prerequisites, real
       //   jobs and former-office traits); buying ludi seats in its campaign is recorded as ambitus;
+      // - dictator / emperor get traits, a status badge and monthly influence and prestige;
+      // - legions and clients pay monthly influence (legions also prestige) with badges;
       // - political cash costs follow inflation: the median house wealth / 12,000 (0.5x-4x).
       // replaces: openCursus, standForOffice, buyVotes (offices now go through the game's elections)
       let previousPoliticsAction = window.corSociety.politicsAction
@@ -22,6 +24,38 @@
       let previousCostLabel = window.corSociety.costLabel
       let previousUpkeep = window.corSociety.simulateClientelaAndLegionUpkeep
       Object.assign(window.corSociety, {
+        politicalTraitDefinitions() {
+          return {
+            corSocietyDictator: { title: 'Dictator', description: 'Holds the dictatorship of Rome.', group: 'skill', skills: { stewardship: 2, combat: 2, eloquence: 2, intelligence: 1 }, points: 900 },
+            corSocietyFormerDictator: { title: 'Former Dictator', description: 'Once held the dictatorship of Rome.', group: 'skill', skills: { stewardship: 1, combat: 1, eloquence: 1, intelligence: 0.5 }, points: 850 },
+            corSocietyImperatorAugustus: { title: 'Imperator Augustus', description: 'Rules Rome as emperor.', group: 'skill', skills: { stewardship: 3, combat: 3, eloquence: 3, intelligence: 2 }, points: 1200 }
+          }
+        },
+        installPoliticalTraitDefinitions() {
+          // The game rebuilds daapi (and its mod trait table) on every save load.
+          if (typeof daapi === 'undefined' || !daapi || typeof daapi.addOrEditTraitDefinition !== 'function') {
+            return false
+          }
+          if (daapi.modData && daapi.modData.traits && daapi.modData.traits.corSocietyImperatorAugustus) {
+            return true
+          }
+          let icon = this.imperatorIcon ? this.imperatorIcon() : this.affairIcon('senator')
+          let traits = this.politicalTraitDefinitions()
+          Object.keys(traits).forEach((trait) => {
+            let def = traits[trait]
+            try {
+              daapi.addOrEditTraitDefinition({
+                trait,
+                traitInfo: { group: def.group, modifiers: { skills: def.skills }, opposites: [], isStackable: false, points: def.points },
+                icon,
+                text: { title: def.title, description: def.description }
+              })
+            } catch (err) {
+              console.warn(err)
+            }
+          })
+          return true
+        },
         politicalPriceIndex(society, state) {
           // Inflation: the median wealth of the Society's houses against a healthy-Society median
           // of 12,000 (measured in a real save), clamped to 0.5x-4x. The player's house counts
@@ -77,6 +111,13 @@
             return previousPoliticsAction.call(this, args)
           } finally {
             this._politicalPriceScale = previousScale
+            if (!/^open/.test(String(args.action || ''))) {
+              try {
+                this.syncPoliticalStanding()
+              } catch (err) {
+                console.warn(err)
+              }
+            }
           }
         },
         simulateClientelaAndLegionUpkeep(society, state) {
@@ -87,6 +128,108 @@
           } finally {
             this._politicalPriceScale = previousScale
           }
+        },
+        setSocietyIncome(key, id, amount, reason, state, force) {
+          // The game appends additive modifiers without replacing by id, so remove ours first.
+          // Two-month duration, refreshed monthly (force): the income lapses if the mod is removed.
+          amount = Math.max(0, Math.round(amount || 0))
+          let existing = ((((state && state.current) || {}).additiveModifiers || {})[key] || []).filter((m) => m && m.id === id)
+          if (!force && existing.length === (amount > 0 ? 1 : 0) && (!amount || Math.round(existing[0].amount) === amount)) {
+            return
+          }
+          try {
+            daapi.removeAdditiveModifier({ key, id })
+            if (amount > 0) {
+              daapi.addAdditiveModifier({ key, id, amount, durationInMonths: 2, reason })
+            }
+          } catch (err) {
+            console.warn(err)
+          }
+        },
+        setSocietyStatus(characterId, key, title, icon, character) {
+          let existing = character && character.statuses && character.statuses[key]
+          if (character && (title ? existing && existing.title === title : !existing)) {
+            return
+          }
+          try {
+            if (title) {
+              daapi.addCharacterStatus({ characterId, key, status: { active: true, title, icon } })
+            } else {
+              daapi.deleteCharacterStatus({ characterId, key })
+            }
+          } catch (err) {
+            console.warn(err)
+          }
+        },
+        vanillaCareerOffice(character) {
+          // The Society's office line (auctoritas, Roman Power summary) mirrors the game's career:
+          // the current magistracy, else the highest office held before.
+          if (!character) return ''
+          let byJob = { consul: 'consul', proConsul: 'consul', censor: 'censor', praetor: 'praetor', proPraetor: 'praetor', aedile: 'aedile', proAedile: 'aedile', quaestor: 'quaestor', proQuaestor: 'quaestor' }
+          if (byJob[character.job]) return byJob[character.job]
+          let traits = character.traits || []
+          let former = [['formerConsul', 'consul'], ['formerCensor', 'censor'], ['formerPraetor', 'praetor'], ['formerAedile', 'aedile'], ['formerQuaestor', 'quaestor']]
+          let found = former.find((pair) => traits.indexOf(pair[0]) >= 0)
+          return found ? found[1] : ''
+        },
+        legionIncomeFactor(legions) {
+          return (legions || []).reduce((sum, legion) => sum + this.clamp(((legion.strength || 0) * (legion.loyalty || 50)) / (60 * 70), 0.2, 1.5), 0)
+        },
+        syncPoliticalStanding(society, state, options) {
+          // Monthly (forced refresh), on load and after political actions: mirror the Society's
+          // political standing into the game (traits, status badges, monthly income). Idempotent.
+          let force = !!(options && options.force)
+          society = society || this.load()
+          state = state || daapi.getState()
+          if (!society || !state || !state.current || !state.characters) {
+            return false
+          }
+          this.installPoliticalTraitDefinitions()
+          this.ensureAdvancedRomanState(society, state)
+          let pp = society.playerPolitics || {}
+          let currentId = this.currentCharacterId(state)
+          let player = state.characters[currentId]
+          if (!player) {
+            return false
+          }
+          this.politicalPriceIndex(society, state)
+          pp.cursus = pp.cursus || {}
+          pp.cursus.office = this.vanillaCareerOffice(player)
+          let rank = this.playerPoliticalRank ? this.playerPoliticalRank(society, state) : ''
+          let has = (trait) => (player.traits || []).indexOf(trait) >= 0
+          let swap = (add, remove) => {
+            try {
+              if (remove && has(remove)) daapi.removeTrait({ characterId: currentId, trait: remove })
+              if (add && !has(add)) daapi.addTrait({ characterId: currentId, trait: add })
+            } catch (err) {
+              console.warn(err)
+            }
+          }
+          if (rank === 'dictator') {
+            swap('corSocietyDictator')
+          } else if (has('corSocietyDictator')) {
+            swap('corSocietyFormerDictator', 'corSocietyDictator')
+          }
+          if (rank === 'emperor') {
+            swap('corSocietyImperatorAugustus')
+          } else if (has('corSocietyImperatorAugustus')) {
+            swap('', 'corSocietyImperatorAugustus')
+          }
+          let rome = society.rome || {}
+          let icon = this.imperatorIcon ? this.imperatorIcon() : this.affairIcon('senator')
+          let rankTitle = rank === 'emperor' ? 'Imperator Augustus' : rank === 'dictator' ? 'Dictator' + (rome.dictatorTermEnd ? ' until ' + rome.dictatorTermEnd : '') : ''
+          this.setSocietyStatus(currentId, 'cor_society_rank_status', rankTitle, icon, player)
+          this.setSocietyIncome('influence', 'cor_society_rank', rank === 'emperor' ? 2500 : rank === 'dictator' ? 1500 : 0, ' - Roman Society: ' + (rankTitle || 'rank'), state, force)
+          this.setSocietyIncome('prestige', 'cor_society_rank', rank === 'emperor' ? 1500 : rank === 'dictator' ? 750 : 0, ' - Roman Society: ' + (rankTitle || 'rank'), state, force)
+          let legions = pp.legions || []
+          let factor = this.legionIncomeFactor(legions)
+          this.setSocietyStatus(currentId, 'cor_society_legions_status', legions.length ? 'Legions: ' + legions.length : '', this.lawIcon ? this.lawIcon('legion') : icon, player)
+          this.setSocietyIncome('influence', 'cor_society_legions', 50 * factor, ' - Roman Society: legions', state, force)
+          this.setSocietyIncome('prestige', 'cor_society_legions', 25 * factor, ' - Roman Society: legions', state, force)
+          let clients = Math.max(0, Math.round(pp.clients || 0))
+          this.setSocietyStatus(currentId, 'cor_society_clients_status', clients ? 'Clients: ' + clients : '', this.affairIcon('support'), player)
+          this.setSocietyIncome('influence', 'cor_society_clients', Math.floor(clients / 4), ' - Roman Society: clientela', state, force)
+          return true
         },
         invokeGameMethod(method) {
           // Run one of the game's own event methods the way its UI does (store action invokeMethod).

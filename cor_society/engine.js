@@ -49,6 +49,7 @@
         }
         if (window.corSociety.installPoliticsGuards) {
           window.corSociety.installPoliticsGuards()
+          window.corSociety.syncPoliticalStanding()
         }
         window.corSociety.installDebugConsoleCommand()
         window.corSociety.installDebtSaleModalPatch()
@@ -83,6 +84,7 @@
       }
       if (window.corSociety.installPoliticsGuards) {
         window.corSociety.installPoliticsGuards()
+        window.corSociety.syncPoliticalStanding()
       }
       window.corSociety.ensure()
       window.corSociety.installDebugConsoleCommand()

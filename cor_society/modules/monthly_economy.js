@@ -114,6 +114,9 @@
                       step('simulateRomanSystemsMonthly', () => this.simulateRomanSystemsMonthly(society, daapi.getState()))
                       refresh()
                     }
+                    if (this.syncPoliticalStanding) {
+                      step('syncPoliticalStanding', () => this.syncPoliticalStanding(society, daapi.getState(), { force: true }))
+                    }
                     step('maintainDynastyHouseSystem-final', () => this.maintainDynastyHouseSystem(society, daapi.getState(), { force: true, phase: 'monthly-final', repairCadetBranches: true }))
                     if (this.repairCharacterDynastyPointers) {
                       step('repairCharacterDynastyPointers', () => this.repairCharacterDynastyPointers(society, daapi.getState()))
