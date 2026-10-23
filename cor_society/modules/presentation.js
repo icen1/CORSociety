@@ -208,7 +208,8 @@
                     variant: 'danger',
                     text: 'Borrow from Bank of Rome (' + amount + ')',
                     tooltip: 'Covers the current negative cash before selling property. Consequences: principal increases and annual interest applies.',
-                    statChanges: { cash: amount },
+                    statChanges: this.classScaledStatChanges({ cash: amount }),
+                    corSocietyStatChanges: { cash: amount },
                     icons: [this.bundledIcon('bank_of_rome', 'money')],
                     action: {
                       event: this.event,
@@ -635,15 +636,42 @@
                   if (!option || !option.action || option.action.event !== this.event || !option.action.method) {
                     return
                   }
-                  let statChanges = option.statChanges || this.methodStatChanges(option, payload)
+                  // corSocietyStatChanges keeps the mod's own amounts, so decorating an option again
+                  // never scales it twice.
+                  let statChanges = option.corSocietyStatChanges || option.statChanges || this.methodStatChanges(option, payload)
                   if (!statChanges || typeof statChanges !== 'object') {
                     return
                   }
-                  if (!option.statChanges) {
-                    option.statChanges = statChanges
-                  }
+                  option.corSocietyStatChanges = statChanges
+                  option.statChanges = this.classScaledStatChanges(statChanges)
                   option.action.context = option.action.context || {}
                   option.action.context.corSocietyVanillaStatChanges = this.baseStatChangesOnly(statChanges)
+                },
+        statChangeClassFactor() {
+                  // The game multiplies a clicked option's cash, influence and prestige, and the preview it
+                  // shows, by the player's class factor (1 for the lowest class, about 5.8 for senators).
+                  try {
+                    let factor = daapi.calculateScaleByClassFactor ? parseFloat(daapi.calculateScaleByClassFactor()) : 1
+                    return factor > 0 && isFinite(factor) ? factor : 1
+                  } catch (err) {
+                    return 1
+                  }
+                },
+        classScaledStatChanges(statChanges) {
+                  // The stat changes to hand the game: the mod's amounts divided by the class factor, so the
+                  // game shows and applies exactly the mod's own amounts.
+                  let factor = this.statChangeClassFactor()
+                  let scaled = { ...(statChanges || {}) }
+                  if (factor === 1) {
+                    return scaled
+                  }
+                  ;['cash', 'influence', 'prestige'].forEach((key) => {
+                    let value = parseFloat(scaled[key] || 0)
+                    if (value) {
+                      scaled[key] = value / factor
+                    }
+                  })
+                  return scaled
                 },
         baseStatChangesOnly(statChanges) {
                   statChanges = statChanges || {}
