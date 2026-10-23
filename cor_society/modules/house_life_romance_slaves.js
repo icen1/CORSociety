@@ -962,11 +962,16 @@
                 },
         generateSlaveCharacter(society, state, ownerHouse, template) {
                   template = template || this.randomSlaveTemplate(ownerHouse)
-                  let ownerDynastyId = ownerHouse && ownerHouse.id
-                  if (!ownerDynastyId && !template.market) {
+                  // The owner is the Society house, but the slave's dynastyId must be that house's game
+                  // dynasty: a cadet house's id is not a game dynasty, and vanilla events read
+                  // state.dynasties[character.dynastyId].prestige.
+                  let ownerHouseId = ownerHouse && ownerHouse.id
+                  let ownerDynastyId = ownerHouse && this.gameDynastyIdForHouse(ownerHouse)
+                  if (!ownerHouseId && !template.market) {
                     let currentId = this.currentCharacterId(state)
                     let current = state.characters && state.characters[currentId]
                     ownerDynastyId = current && current.dynastyId
+                    ownerHouseId = ownerDynastyId
                   }
                   let isMale = template.isMale !== undefined ? !!template.isMale : Math.random() > 0.45
                   template.origin = template.origin || this.randomSlaveOrigin()
@@ -993,7 +998,7 @@
                       corSocietySlaveMarket: !!template.market,
                       corSocietySlaveType: template.type,
                       corSocietySlaveLevel: template.level,
-                      corSocietySlaveOwnerHouseId: ownerDynastyId || '',
+                      corSocietySlaveOwnerHouseId: ownerHouseId || '',
                       corSocietySlaveOrigin: template.origin,
                       corSocietySlaveFullName: template.fullName,
                       corSocietySlaveTask: template.task || profile.task || template.type || 'labor',
@@ -1012,7 +1017,7 @@
                     corSocietySlaveMarket: !!template.market,
                     corSocietySlaveType: template.type,
                     corSocietySlaveLevel: template.level,
-                    corSocietySlaveOwnerHouseId: ownerDynastyId || '',
+                    corSocietySlaveOwnerHouseId: ownerHouseId || '',
                     corSocietySlaveOrigin: template.origin,
                     corSocietySlaveFullName: template.fullName,
                     corSocietySlaveTask: template.task || profile.task || template.type || 'labor',
@@ -1028,7 +1033,7 @@
                     console.warn(err)
                   }
                   template.characterId = characterId
-                  template.ownerHouseId = ownerDynastyId || ''
+                  template.ownerHouseId = ownerHouseId || ''
                   template.active = !template.market
                   society.generatedCharacterIds = society.generatedCharacterIds || []
                   if (society.generatedCharacterIds.indexOf(characterId) < 0) {

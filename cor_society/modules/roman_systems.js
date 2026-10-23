@@ -42,18 +42,11 @@
           return result
         },
         installTaxCrimeModalPatch() {
-          if (this.taxCrimeModalPatchInstalled) return true
+          // Re-checked on every call (cheap): the game rebuilds daapi on save load.
           this.taxCrimeModalPatchInstalled = true
           ;['pushInteractionModalQueue', 'pushInteractionModalButtonQueue'].forEach((methodName) => {
             try {
-              let original = daapi[methodName]
-              if (typeof original !== 'function' || original.corSocietyTaxCrimePatch) return
-              let self = this
-              let wrapped = function(payload) {
-                return original.call(this, self.patchTaxCrimeModalPayload(payload))
-              }
-              wrapped.corSocietyTaxCrimePatch = true
-              daapi[methodName] = wrapped
+              this.wrapModalFunction(methodName, 'corSocietyTaxCrimePatch', (payload) => this.patchTaxCrimeModalPayload(payload))
             } catch (err) {
               console.warn(err)
             }
@@ -2141,22 +2134,18 @@
           return (law.description || 'No description recorded.') + '\nCost: ' + this.costLabel(law.cost || {}) + (law.civilWar ? '\nCivil war risk: ' + Math.round(law.civilWar * 100) + '%' : '') + (law.progress ? '\nEmpire progress: +' + law.progress + '%' : '')
         },
         simulateRomanSystemsMonthly(society, state) {
-          try {
-            this.ensureAdvancedRomanState(society, state)
-            this.installTaxCrimeModalPatch()
-            this.resolveCivilWarPending(society, state)
-            this.chargeBodyguardUpkeep(society, state)
-            this.simulateNpcCrimes(society, state)
-            this.simulateAssassinations(society, state)
-            this.auditHiddenCrimes(society, state)
-            this.syncCrimeStatuses(society, state)
-            this.syncMilitaryStatuses(society, state)
-            this.simulateClientelaAndLegionUpkeep(society, state)
-            this.simulateDepositionCoalitions(society, state)
-            this.simulateCrisesAndMarket(society, state)
-          } catch (err) {
-            console.warn(err)
-          }
+          // Each system runs on its own, like monthlyTick's steps: one failure is recorded and the
+          // rest of the month's Roman systems still run.
+          ;['ensureAdvancedRomanState', 'installTaxCrimeModalPatch', 'resolveCivilWarPending', 'chargeBodyguardUpkeep', 'simulateNpcCrimes',
+            'simulateAssassinations', 'auditHiddenCrimes', 'syncCrimeStatuses', 'syncMilitaryStatuses', 'simulateClientelaAndLegionUpkeep',
+            'simulateDepositionCoalitions', 'simulateCrisesAndMarket'].forEach((name) => {
+            try {
+              this[name](society, state)
+            } catch (err) {
+              console.warn('Roman Society monthly step failed: ' + name, err)
+              if (society) society.lastMonthlyError = name + ': ' + (err && err.message)
+            }
+          })
         },
         simulateNpcCrimes(society, state) {
           let houses = this.monthlyHouseSimulationBatch ? this.monthlyHouseSimulationBatch(society, this.sortedHouses(society)).slice(0, 10) : this.sortedHouses(society).slice(0, 10)

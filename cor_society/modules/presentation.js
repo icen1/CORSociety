@@ -142,24 +142,40 @@
                   }
                   return this._iconCache[key]
                 },
-        installDebtSaleModalPatch() {
-                  if (this.debtSaleModalPatchInstalled) {
-                    this.startDebtSaleModalObserver()
-                    return
+        modalFunctionChainHas(fn, marker) {
+                  // Walk a daapi modal function's wrapper chain (ours record __corSocietyWrapped, the
+                  // bundled translator records __corTranslatorOriginal) looking for a patch marker.
+                  for (let i = 0; fn && i < 16; i += 1) {
+                    if (fn[marker]) {
+                      return true
+                    }
+                    fn = fn.__corSocietyWrapped || fn.__corTranslatorOriginal
                   }
+                  return false
+                },
+        wrapModalFunction(methodName, marker, patchPayload) {
+                  // Idempotent per function chain instead of per session: the game rebuilds daapi on
+                  // every save load, which used to drop these patches until the game restarted.
+                  let original = daapi[methodName]
+                  if (typeof original !== 'function' || this.modalFunctionChainHas(original, marker)) {
+                    return false
+                  }
+                  let wrapped = function(payload) {
+                    return original.call(this, patchPayload(payload))
+                  }
+                  Object.keys(original).forEach((prop) => {
+                    wrapped[prop] = original[prop]
+                  })
+                  wrapped[marker] = true
+                  wrapped.__corSocietyWrapped = original
+                  daapi[methodName] = wrapped
+                  return true
+                },
+        installDebtSaleModalPatch() {
                   this.debtSaleModalPatchInstalled = true
                   ;['pushInteractionModalQueue', 'pushInteractionModalButtonQueue'].forEach((methodName) => {
                     try {
-                      let original = daapi[methodName]
-                      if (typeof original !== 'function' || original.corSocietyDebtSalePatch) {
-                        return
-                      }
-                      let self = this
-                      let wrapped = function(payload) {
-                        return original.call(this, self.patchDebtSaleModalPayload(payload))
-                      }
-                      wrapped.corSocietyDebtSalePatch = true
-                      daapi[methodName] = wrapped
+                      this.wrapModalFunction(methodName, 'corSocietyDebtSalePatch', (payload) => this.patchDebtSaleModalPayload(payload))
                     } catch (err) {
                       console.warn(err)
                     }
@@ -304,6 +320,9 @@
                   }
                   let options = payload.options || []
                   if (payload.societySummaryOptions && payload.societySummaryOptions.length) {
+                    payload.societySummaryOptions.forEach((option) => {
+                      if (option && typeof option === 'object') option.corSocietySummaryTile = true
+                    })
                     options = payload.societySummaryOptions.concat(options)
                   }
                   payload.options = this.decorateModalOptions(this.addSocietyCloseOption(options, payload), payload)
@@ -381,7 +400,8 @@
                     disabled: true,
                     showDisabledWithTooltip: true,
                     tooltip: tooltip || text,
-                    icons: (icons || []).filter(Boolean)
+                    icons: (icons || []).filter(Boolean),
+                    corSocietySummaryTile: true
                   }
                 },
         hubSummaryOptions(state, society, counts, rivals, allies, playerStatus) {
@@ -628,6 +648,13 @@
                   }
                   if (option.disabled && option.tooltip) {
                     option.showDisabledWithTooltip = true
+                  }
+                  if (option.disabled && option.showDisabledWithTooltip === true) {
+                    // The game renders `disabled && showDisabledWithTooltip || tooltip` as text under the
+                    // option and expects a string (vanilla passes the reason). A boolean throws
+                    // "t.forEach is not a function" in ProcessedMessageComponent on every render.
+                    // Summary tiles keep a blank box so the summary screens look unchanged.
+                    option.showDisabledWithTooltip = option.corSocietySummaryTile ? ' ' : String(option.tooltip || option.text || ' ')
                   }
                   return option
                 },
