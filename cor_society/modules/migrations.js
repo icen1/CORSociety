@@ -135,6 +135,38 @@
             this.log(society, (house.name || 'A house') + '\'s treasury and estates, swollen by a scribe\'s accounting error, are restored to an honest measure.', 'log', house.id)
           })
           return flagged.length
+        },
+        fallbackHouseName(society, state, dynastyId) {
+          // A name for a house record that has none: the Society dynasty's name, else the game
+          // dynasty's nomen + cognomen (game dynasties have no `name`), else the id made readable.
+          state = state || daapi.getState()
+          let societyDynasty = society && society.dynasties && society.dynasties[dynastyId]
+          if (societyDynasty && societyDynasty.name) {
+            return String(societyDynasty.name)
+          }
+          let gameDynasty = state && state.dynasties && state.dynasties[dynastyId]
+          let name = gameDynasty ? (String(gameDynasty.nomen || '') + ' ' + String(gameDynasty.cognomen || '')).replace(/\s+/g, ' ').trim() : ''
+          return name || String(dynastyId || '').replace(/_/g, ' ').replace(/\s+/g, ' ').trim() || 'Unknown House'
+        },
+        nameNamelessHouses(society, state) {
+          // Step 5. Repair code used to create origin houses for dynasties with no living members
+          // without a name, and only the member sync names a house, so menus and the log showed
+          // "undefined". New records are named in createHouseRecord; this names the existing ones.
+          if (!society) {
+            return 0
+          }
+          let named = 0
+          ;[society.houses || {}, society.deadHouses || {}].forEach((houses) => {
+            Object.keys(houses).forEach((houseId) => {
+              let house = houses[houseId]
+              if (!house || typeof house !== 'object' || house.name) {
+                return
+              }
+              house.name = this.fallbackHouseName(society, state, this.gameDynastyIdForHouse ? this.gameDynastyIdForHouse(house) : (house.dynastyId || houseId))
+              named += 1
+            })
+          })
+          return named
         }
       })
       window.corSociety._mixinCorSocietyMigrationsVersion = '1.1.331'

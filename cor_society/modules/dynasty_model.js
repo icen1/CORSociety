@@ -1250,6 +1250,9 @@
                     createdAtTurn: '',
                     version: this.version,
                     branchName: String(houseId) === String(dynastyId) ? 'House of origin' : 'Cadet house',
+                    // Callers that know better overwrite this; repair code that creates an origin house
+                    // for a dynasty with no living members does not, which left it nameless.
+                    name: this.fallbackHouseName ? this.fallbackHouseName(null, null, dynastyId) : '',
                     relation: this.randomInt(-12, 16),
                     favor: 0,
                     heat: 0,
