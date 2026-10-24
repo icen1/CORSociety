@@ -887,7 +887,16 @@
                       if (!own || !own.configurable) {
                         return own
                       }
-                      return { value: handler.get(object, key), writable: true, enumerable: own.enumerable, configurable: true }
+                      // Answered lazily: listing keys (Object.keys, for...in, JSON) only needs enumerability,
+                      // so no view is built for a value until it is read.
+                      return {
+                        get: () => handler.get(object, key),
+                        set: (value) => {
+                          handler.set(object, key, value)
+                        },
+                        enumerable: own.enumerable,
+                        configurable: true
+                      }
                     }
                   }
                   viewOf = (object) => {
