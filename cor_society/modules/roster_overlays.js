@@ -538,6 +538,9 @@
                   if (this.installPopulationCountGuard) {
                     this.installPopulationCountGuard()
                   }
+                  if (this.installFamilyGuards) {
+                    this.installFamilyGuards()
+                  }
                   if (this.installPoliticsGuards) {
                     this.installPoliticsGuards()
                   }
