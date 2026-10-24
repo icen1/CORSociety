@@ -231,9 +231,13 @@
                     snapshot.family = this.familyDiagnostics ? this.familyDiagnostics(society, state) : null
                   }
                   if (section === 'full') {
+                    // The snapshot is saved in a global flag: plain copies only (getState() hands out live
+                    // views), and without modFlags, which hold the Society and earlier snapshots.
+                    let current = Object.assign({}, state.current || {})
+                    delete current.modFlags
                     snapshot.rawSociety = society
-                    snapshot.rawCurrent = state.current
-                    snapshot.rawSettings = state.settings
+                    snapshot.rawCurrent = this.plainCopy(current)
+                    snapshot.rawSettings = this.plainCopy(state.settings)
                   }
                   return snapshot
                 },
@@ -569,11 +573,11 @@
                       return
                     }
                     // Only plain data reaches the game: a state view passed in an argument (a look, a
-                    // features object) is replaced by a plain copy. setGlobalFlag carries the whole
-                    // Society, too big to walk on every save; nothing may store a view there.
-                    let detach = key !== 'setGlobalFlag'
+                    // features object, a debug snapshot) is replaced by a plain copy. The Society flag
+                    // is the exception, too big to walk on every save; nothing may store a view there.
                     let wrapped = function() {
-                      let args = detach && self.detachStateViews ? Array.prototype.map.call(arguments, (arg) => self.detachStateViews(arg)) : arguments
+                      let society = key === 'setGlobalFlag' && arguments[0] && arguments[0].flag === self.flag
+                      let args = !society && self.detachStateViews ? Array.prototype.map.call(arguments, (arg) => self.detachStateViews(arg)) : arguments
                       // A write that would change nothing never reaches the game (see isNoOpDaapiWrite).
                       if (!(typeof window !== 'undefined' && window.corSocietyDisableNoopFilter) && self.isNoOpDaapiWrite) {
                         let live = self.liveGameState()
