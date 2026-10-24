@@ -799,8 +799,56 @@
                     influence: [5, 8, 14, 24, 42, 75][level] || 14
                   }
                 },
+        inventedPlayerRelative(character, state) {
+                  // Not a real relative of the player. A real relative's parents lead, through game people only,
+                  // up to the player or one of the player's ancestors. Not real: anyone the mod generated or
+                  // invented for the player's tree (corSocietyGenerated, corSocietyPlayerTreeRole) and their
+                  // descendants, spouses who married in, the unlinked relative the game gives a new player and
+                  // his line, and a line whose link was culled.
+                  let characters = (state && state.characters) || {}
+                  let usable = (id) => id !== undefined && id !== null && id !== ''
+                  if (!character) {
+                    return false
+                  }
+                  let ancestry = {}
+                  let queue = [this.currentCharacterId(state)]
+                  let guard = 0
+                  while (queue.length && guard < 200) {
+                    guard += 1
+                    let id = queue.shift()
+                    let person = usable(id) ? characters[id] : null
+                    if (!person || ancestry[String(id)]) {
+                      continue
+                    }
+                    ancestry[String(id)] = true
+                    queue.push(person.fatherId, person.motherId)
+                  }
+                  let seen = {}
+                  queue = [character.id]
+                  guard = 0
+                  while (queue.length && guard < 200) {
+                    guard += 1
+                    let id = queue.shift()
+                    if (!usable(id) || seen[String(id)]) {
+                      continue
+                    }
+                    seen[String(id)] = true
+                    if (ancestry[String(id)]) {
+                      return false
+                    }
+                    let person = characters[id]
+                    if (!person || person.corSocietyGenerated || person.corSocietyPlayerTreeRole) {
+                      continue
+                    }
+                    queue.push(person.fatherId, person.motherId)
+                  }
+                  return true
+                },
         cadetFounderCandidate(society, state, dynastyId, playerOnly, excludedIds) {
                   let currentId = this.currentCharacterId(state)
+                  // Only real relatives split off a branch of the player's dynasty, never the line the
+                  // mod invented for the player's tree.
+                  let playerDynasty = !playerOnly && String(dynastyId) === String(this.currentCharacterDynastyId(state))
                   let ids = playerOnly ? this.playerFamilyMemberIds(state) : this.memberIdsForDynasty(society, state, dynastyId)
                   let originHouse = this.primaryHouseForDynasty(society, dynastyId)
                   let candidates = ids.map((id) => {
@@ -810,6 +858,7 @@
                   }).filter((character) => {
                     if (!character || character.isDead || character.corSocietySlave || character.corSocietySlaveActive) return false
                     if (excludedIds && excludedIds[String(character.id)]) return false
+                    if (playerDynasty && this.inventedPlayerRelative(character, state)) return false
                     if (!character.dynastyId || String(character.dynastyId) !== String(dynastyId)) return false
                     let houseId = this.resolveCharacterHouseId(character, state, society, { repair: false })
                     if (originHouse && houseId && String(houseId) !== String(originHouse.id)) return false
@@ -828,6 +877,9 @@
                   // split off. Branches the player founds are not restricted.
                   let excludedIds = reason !== 'player branch foundation' ? this.playerKeptIdMap(state) : null
                   if (excludedIds && excludedIds[String(founder.id)]) {
+                    return false
+                  }
+                  if (excludedIds && String(dynastyId) === String(this.currentCharacterDynastyId(state)) && this.inventedPlayerRelative(founder, state)) {
                     return false
                   }
                   let dynasty = society.dynasties[dynastyId] || {}
