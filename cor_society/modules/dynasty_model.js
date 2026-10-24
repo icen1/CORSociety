@@ -1085,6 +1085,38 @@
                     (house.cadetHouse || house.houseKind === 'cadet') && house.foundedReason !== 'player branch foundation' &&
                     String(this.gameDynastyIdForHouse(house)) === String(playerHouseId))
                 },
+        dissolvePlayerDynastyCadets(society, state, houseIds, logText) {
+                  // Dissolves branches of the player's dynasty: everyone of the dynasty living in them
+                  // moves back to the player's house, and the houses are removed.
+                  let playerHouseId = this.currentCharacterDynastyId(state)
+                  if (!playerHouseId || !houseIds || !houseIds.length) {
+                    return 0
+                  }
+                  let moved = 0
+                  let dissolveMap = this.idSet(houseIds)
+                  Object.keys(state.characters).forEach((characterId) => {
+                    let character = state.characters[characterId]
+                    if (!character || String(character.dynastyId || '') !== String(playerHouseId)) {
+                      return
+                    }
+                    let houseId = character.corSocietyHouseId && String(character.corSocietyHouseId)
+                    if (houseId && dissolveMap[houseId] && this.repairCharacterHousePointer(state, characterId, playerHouseId)) {
+                      moved += 1
+                    }
+                  })
+                  let dynasty = society.dynasties && society.dynasties[playerHouseId]
+                  houseIds.forEach((houseId) => {
+                    let house = society.houses[houseId]
+                    delete society.houses[houseId]
+                    society.generatedHouseIds = (society.generatedHouseIds || []).filter((id) => String(id) !== String(houseId))
+                    if (dynasty) {
+                      dynasty.houseIds = (dynasty.houseIds || []).filter((id) => String(id) !== String(houseId))
+                      if (String(dynasty.headHouseId || '') === String(houseId)) dynasty.headHouseId = playerHouseId
+                    }
+                    this.log(society, logText((house && house.name) || 'An AI cadet house'), 'familyTree', playerHouseId)
+                  })
+                  return moved
+                },
         repairPlayerFamilyHouseAssignment(society, state) {
                   // Repairs saves where an NPC cadet foundation absorbed the player's family into an
                   // AI-controlled house. A cadet founded by someone the player keeps (their line,
@@ -1114,23 +1146,13 @@
                         return
                       }
                       let houseId = character.corSocietyHouseId && String(character.corSocietyHouseId)
-                      if (houseId && cadetMap[houseId] && (dissolveMap[houseId] || kept[String(characterId)])) {
+                      if (houseId && cadetMap[houseId] && !dissolveMap[houseId] && kept[String(characterId)]) {
                         if (this.repairCharacterHousePointer(state, characterId, playerHouseId)) {
                           repaired += 1
                         }
                       }
                     })
-                    let dynasty = society.dynasties && society.dynasties[playerHouseId]
-                    dissolveIds.forEach((houseId) => {
-                      let house = society.houses[houseId]
-                      delete society.houses[houseId]
-                      society.generatedHouseIds = (society.generatedHouseIds || []).filter((id) => String(id) !== String(houseId))
-                      if (dynasty) {
-                        dynasty.houseIds = (dynasty.houseIds || []).filter((id) => String(id) !== String(houseId))
-                        if (String(dynasty.headHouseId || '') === String(houseId)) dynasty.headHouseId = playerHouseId
-                      }
-                      this.log(society, (house && house.name || 'An AI cadet house') + ' is dissolved: your family stays in the protected player household.', 'familyTree', playerHouseId)
-                    })
+                    repaired += this.dissolvePlayerDynastyCadets(society, state, dissolveIds, (name) => name + ' is dissolved: your family stays in the protected player household.')
                   }
                   Object.keys(society.houses).forEach((houseId) => {
                     let house = society.houses[houseId]

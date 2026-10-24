@@ -167,6 +167,25 @@
             })
           })
           return named
+        },
+        foldBackInventedCadets(society, state) {
+          // Step 6. The monthly NPC cadet roll let the relatives the mod invents to fill in the
+          // player's tree (inventedPlayerRelative) found branches of the player's dynasty. Those
+          // branches are dissolved and their people rejoin the player's house; a real relative's
+          // branch stays.
+          if (!society || !society.houses || !state || !state.characters || !this.dissolvePlayerDynastyCadets) {
+            return 0
+          }
+          let houseIds = Object.keys(society.houses).filter((houseId) => {
+            let house = society.houses[houseId]
+            if (!this.isNpcCadetOfPlayerDynasty(society, state, house)) {
+              return false
+            }
+            let founder = house.founderId && state.characters[house.founderId]
+            return !founder || this.inventedPlayerRelative(founder, state)
+          })
+          this.dissolvePlayerDynastyCadets(society, state, houseIds, (name) => name + ' is folded back into your house: no real branch of your family founded it.')
+          return houseIds.length
         }
       })
       window.corSociety._mixinCorSocietyMigrationsVersion = '1.1.331'
