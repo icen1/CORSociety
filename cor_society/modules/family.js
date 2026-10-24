@@ -506,6 +506,11 @@
             current.formerHouseholdCharacterIds = plan.formerBefore.slice()
             current.householdCharacterIds = this.uniqueIds(plan.householdBefore.concat([plan.spouseId]))
           }
+          if (plan.share) {
+            // flagWasGivenInheritance also marks the disinherited; this one was paid, so 'Restore
+            // Inheritance' (a second share at your death) is never offered to them.
+            character.corSocietyShareGivenEarly = true
+          }
           store.dispatch('forceUpdateCharacter', plan.characterId)
           if (this.invalidateStateSnapshot) {
             this.invalidateStateSnapshot()

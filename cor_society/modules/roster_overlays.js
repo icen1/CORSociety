@@ -220,7 +220,7 @@
                       }
                     })
                   }
-                  if (isHousehold && !isCurrent && !character.isDead && character.flagWasGivenInheritance) {
+                  if (isHousehold && !isCurrent && !character.isDead && character.flagWasGivenInheritance && !character.corSocietyShareGivenEarly) {
                     items.push({
                       key: 'RestoreInheritance',
                       action: {

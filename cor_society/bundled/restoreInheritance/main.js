@@ -8,6 +8,7 @@
     if (
       !character.isDead &&
       character.flagWasGivenInheritance && // Check if they were disinherited
+      !character.corSocietyShareGivenEarly && // not paid their share early
       character.id !== player.id // Verifica que no sea el personaje jugador
     ) {
       daapi.addCharacterAction({
@@ -63,6 +64,10 @@
       })
     },
     doRestoreInheritance({ characterId }) {
+      let character = daapi.getCharacter({ characterId })
+      if (!character || character.corSocietyShareGivenEarly) {
+        return
+      }
       daapi.updateCharacter({
         characterId,
         character: {
