@@ -91,6 +91,11 @@
                     }
                     let gameDynasty = (state && state.dynasties && state.dynasties[dynastyId]) || {}
                     let record = society.dynasties[dynastyId] || {}
+                    let promoted = this.promoteDynastyOrigin(society, knownHousesByDynasty[dynastyId])
+                    if (promoted) {
+                      record.originHouseId = promoted.id
+                      record.headHouseId = promoted.id
+                    }
                     let originHouseId = this.originHouseIdForDynasty(dynastyId)
                     let originHouse = society.houses[originHouseId] || society.houses[knownHousesByDynasty[dynastyId][0]] || {}
                     record.id = dynastyId
@@ -128,6 +133,28 @@
                     society.dynasties[dynastyId] = record
                   }
                   return society
+                },
+        promoteDynastyOrigin(society, houseIds) {
+                  // A dynasty whose origin house died out is headed by its strongest surviving branch,
+                  // which becomes the origin: its own branches now hang from it, and only its members
+                  // (never its founder again) can split off from it.
+                  let houses = (houseIds || []).map((houseId) => society.houses[houseId]).filter(Boolean)
+                  if (!houses.length || houses.some((house) => house.originHouse)) {
+                    return false
+                  }
+                  let head = houses.slice().sort((a, b) => this.houseHeadshipScore(b) - this.houseHeadshipScore(a))[0]
+                  head.originHouse = true
+                  head.houseKind = 'origin'
+                  head.type = 'origin'
+                  head.parentHouseId = ''
+                  head.branchName = 'House of origin'
+                  houses.forEach((house) => {
+                    if (house !== head) {
+                      house.parentHouseId = head.id
+                    }
+                  })
+                  this.log(society, head.name + ' now heads its dynasty: the house of origin has died out.', 'familyTree', head.id)
+                  return head
                 },
         renameDynastyHouses(society, dynastyId, oldName, newName) {
                   let renamed = 0
@@ -849,6 +876,7 @@
                   // Only real relatives split off a branch of the player's dynasty, never the line the
                   // mod invented for the player's tree.
                   let playerDynasty = !playerOnly && String(dynastyId) === String(this.currentCharacterDynastyId(state))
+                  let founders = playerOnly ? {} : this.houseFounderIdMap(society)
                   let ids = playerOnly ? this.playerFamilyMemberIds(state) : this.memberIdsForDynasty(society, state, dynastyId)
                   let originHouse = this.primaryHouseForDynasty(society, dynastyId)
                   let candidates = ids.map((id) => {
@@ -859,6 +887,7 @@
                     if (!character || character.isDead || character.corSocietySlave || character.corSocietySlaveActive) return false
                     if (excludedIds && excludedIds[String(character.id)]) return false
                     if (playerDynasty && this.inventedPlayerRelative(character, state)) return false
+                    if (founders[String(character.id)]) return false
                     if (!character.dynastyId || String(character.dynastyId) !== String(dynastyId)) return false
                     let houseId = this.resolveCharacterHouseId(character, state, society, { repair: false })
                     if (originHouse && houseId && String(houseId) !== String(originHouse.id)) return false
@@ -892,6 +921,20 @@
                   if (houses.length >= limit) {
                     return false
                   }
+                  let moveIds = this.cadetBranchMemberIds(state, founder)
+                  if (excludedIds) {
+                    moveIds = moveIds.filter((characterId) => !excludedIds[String(characterId)])
+                    // A branch splits off: its founder has never founded a house before, and someone
+                    // stays behind in the origin house. Otherwise the whole family would hop to a new
+                    // house, leave the old one to die out, and do it again from there.
+                    if (this.houseFounderIdMap(society)[String(founder.id)]) {
+                      return false
+                    }
+                    let leaving = this.idSet(moveIds)
+                    if (!this.houseLivingMemberIds(society, state, originHouse).some((characterId) => !leaving[String(characterId)])) {
+                      return false
+                    }
+                  }
                   let houseId = this.branchHouseId(dynastyId, founder.id + '_' + houses.length + '_' + this.monthKey(state))
                   let house = this.createHouseRecord(houseId, dynastyId)
                   house.name = 'House of ' + (founder.praenomen || 'Cadet') + ' ' + (dynasty.name || originHouse.name || '')
@@ -919,10 +962,6 @@
                   house.memberIds = []
                   house.notableIds = []
                   society.houses[houseId] = house
-                  let moveIds = this.cadetBranchMemberIds(state, founder)
-                  if (excludedIds) {
-                    moveIds = moveIds.filter((characterId) => !excludedIds[String(characterId)])
-                  }
                   moveIds.forEach((characterId) => {
                     try {
                       daapi.updateCharacter({ characterId, character: { corSocietyHouseId: houseId, dynastyId } })
@@ -948,6 +987,17 @@
                   }
                   this.log(society, house.name + ' is founded as a cadet house of ' + (dynasty.name || originHouse.name) + '.', 'familyTree', house.id)
                   return house
+                },
+        houseFounderIdMap(society) {
+                  // Everyone who founded a house that still stands.
+                  let map = {}
+                  Object.keys((society && society.houses) || {}).forEach((houseId) => {
+                    let founderId = society.houses[houseId] && society.houses[houseId].foundedByCharacterId
+                    if (founderId) {
+                      map[String(founderId)] = true
+                    }
+                  })
+                  return map
                 },
         cadetBranchMemberIds(state, founder) {
                   let seen = {}
