@@ -94,7 +94,14 @@
                     let originHouseId = this.originHouseIdForDynasty(dynastyId)
                     let originHouse = society.houses[originHouseId] || society.houses[knownHousesByDynasty[dynastyId][0]] || {}
                     record.id = dynastyId
-                    record.name = record.name || this.houseName(gameDynasty, dynastyId)
+                    // The game's family name wins: a new player can edit the cognomen after the
+                    // dynasty exists, and the game can rename it later. Houses named after the old
+                    // name ('House of Gaius <old>', 'Cadet branch of <old>') are renamed with it.
+                    let gameName = gameDynasty.nomen || gameDynasty.cognomen ? this.houseName(gameDynasty, dynastyId) : ''
+                    if (gameName && record.name && record.name !== gameName) {
+                      this.renameDynastyHouses(society, dynastyId, record.name, gameName)
+                    }
+                    record.name = gameName || record.name || this.houseName(gameDynasty, dynastyId)
                     if (!record.originHouseId || !society.houses[record.originHouseId] || String(this.gameDynastyIdForHouse(society.houses[record.originHouseId])) !== String(dynastyId)) {
                       record.originHouseId = society.houses[originHouseId] ? originHouseId : originHouse.id
                     }
@@ -121,6 +128,27 @@
                     society.dynasties[dynastyId] = record
                   }
                   return society
+                },
+        renameDynastyHouses(society, dynastyId, oldName, newName) {
+                  let renamed = 0
+                  Object.keys(society.houses || {}).forEach((houseId) => {
+                    let house = society.houses[houseId]
+                    if (!house || String(this.gameDynastyIdForHouse(house)) !== String(dynastyId)) {
+                      return
+                    }
+                    let name = String(house.name || '')
+                    if (name === oldName) {
+                      house.name = newName
+                      renamed += 1
+                    } else if (name.slice(-(oldName.length + 1)) === ' ' + oldName) {
+                      house.name = name.slice(0, name.length - oldName.length) + newName
+                      renamed += 1
+                    }
+                    if (house.branchName === 'Cadet branch of ' + oldName) {
+                      house.branchName = 'Cadet branch of ' + newName
+                    }
+                  })
+                  return renamed
                 },
         repairDynastyHouseSystem(society, state) {
                   if (!society || !state || !state.characters) {
