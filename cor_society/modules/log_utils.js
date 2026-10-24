@@ -764,10 +764,13 @@
                   // A read-through, copy-on-write view of a live game object. Reads see the live value
                   // (objects come back as views too); writes and deletes stay in this view and never reach
                   // the game. Arrays answer with the plain Array methods, not Vue's patched ones, so a push on
-                  // a view neither changes nor notifies the live array.
+                  // a view neither changes nor notifies the live array. A prototype change also stays in the
+                  // view; freezing or sealing one is refused, since a proxy can only report it by freezing
+                  // the live object.
                   let marker = this.STATE_VIEW
                   let overlays = new WeakMap()
                   let views = new WeakMap()
+                  let prototypes = new WeakMap()
                   let removed = {}
                   let overlay = (object) => {
                     let entries = overlays.get(object)
@@ -787,6 +790,10 @@
                       if (entries && entries.has(key)) {
                         let value = entries.get(key)
                         return value === removed ? undefined : value
+                      }
+                      if (prototypes.has(object) && !Object.prototype.hasOwnProperty.call(object, key)) {
+                        let proto = prototypes.get(object)
+                        return proto ? Reflect.get(proto, key) : undefined
                       }
                       if (Array.isArray(object) && typeof Array.prototype[key] === 'function' && !Object.prototype.hasOwnProperty.call(object, key)) {
                         return Array.prototype[key]
@@ -824,7 +831,21 @@
                       if (entries && entries.has(key)) {
                         return entries.get(key) !== removed
                       }
+                      if (prototypes.has(object) && !Object.prototype.hasOwnProperty.call(object, key)) {
+                        let proto = prototypes.get(object)
+                        return !!proto && key in proto
+                      }
                       return key in object
+                    },
+                    getPrototypeOf(object) {
+                      return prototypes.has(object) ? prototypes.get(object) : Reflect.getPrototypeOf(object)
+                    },
+                    setPrototypeOf(object, proto) {
+                      prototypes.set(object, proto)
+                      return true
+                    },
+                    preventExtensions() {
+                      return false
                     },
                     ownKeys(object) {
                       let keys = Reflect.ownKeys(object)
