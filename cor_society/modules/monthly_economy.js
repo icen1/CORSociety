@@ -67,6 +67,9 @@
                     step('repairPlayerFamilyHouseAssignment', () => this.repairPlayerFamilyHouseAssignment(society, state))
                     refresh()
                     step('syncPlayerWorldEffects', () => this.syncPlayerWorldEffects(society, state))
+                    if (this.syncInheritanceEligibility) {
+                      step('syncInheritanceEligibility', () => this.syncInheritanceEligibility(daapi.getState()))
+                    }
                     step('repairFalsePlayerSlaveFlags', () => this.repairFalsePlayerSlaveFlags(society, state))
                     step('syncPlayerHouseRecord', () => this.syncPlayerHouseRecord(society, state))
                     step('repairDynastyHouseSystem', () => this.repairDynastyHouseSystem(society, state))
@@ -110,6 +113,9 @@
                     if (this.simulateRomanSystemsMonthly) {
                       step('simulateRomanSystemsMonthly', () => this.simulateRomanSystemsMonthly(society, daapi.getState()))
                       refresh()
+                    }
+                    if (this.syncPoliticalStanding) {
+                      step('syncPoliticalStanding', () => this.syncPoliticalStanding(society, daapi.getState(), { force: true }))
                     }
                     step('maintainDynastyHouseSystem-final', () => this.maintainDynastyHouseSystem(society, daapi.getState(), { force: true, phase: 'monthly-final', repairCadetBranches: true }))
                     if (this.repairCharacterDynastyPointers) {

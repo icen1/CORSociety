@@ -44,6 +44,13 @@
         if (window.corSociety.installPopulationCountGuard) {
           window.corSociety.installPopulationCountGuard()
         }
+        if (window.corSociety.syncInheritanceEligibility) {
+          window.corSociety.syncInheritanceEligibility()
+        }
+        if (window.corSociety.installPoliticsGuards) {
+          window.corSociety.installPoliticsGuards()
+          window.corSociety.syncPoliticalStanding()
+        }
         window.corSociety.installDebugConsoleCommand()
         window.corSociety.installDebtSaleModalPatch()
         window.corSociety.registerPlayerEntryActions()
@@ -71,6 +78,13 @@
       }
       if (window.corSociety.installPopulationCountGuard) {
         window.corSociety.installPopulationCountGuard()
+      }
+      if (window.corSociety.syncInheritanceEligibility) {
+        window.corSociety.syncInheritanceEligibility()
+      }
+      if (window.corSociety.installPoliticsGuards) {
+        window.corSociety.installPoliticsGuards()
+        window.corSociety.syncPoliticalStanding()
       }
       window.corSociety.ensure()
       window.corSociety.installDebugConsoleCommand()
@@ -110,7 +124,9 @@
         { event: '/cor_society/modules/technical_safety', method: '_mixinCorSocietyTechnicalSafety' },
         { event: '/cor_society/modules/roman_systems', method: '_mixinCorSocietyRomanSystems' },
         { event: '/cor_society/modules/diagnostics', method: '_mixinCorSocietyDiagnostics' },
-        { event: '/cor_society/modules/population', method: '_mixinCorSocietyPopulation' }
+        { event: '/cor_society/modules/population', method: '_mixinCorSocietyPopulation' },
+        { event: '/cor_society/modules/family', method: '_mixinCorSocietyFamily' },
+        { event: '/cor_society/modules/politics_integration', method: '_mixinCorSocietyPoliticsIntegration' }
       ]
       mixins.forEach((mixin) => {
         try {

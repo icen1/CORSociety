@@ -538,6 +538,9 @@
                   if (this.installPopulationCountGuard) {
                     this.installPopulationCountGuard()
                   }
+                  if (this.installPoliticsGuards) {
+                    this.installPoliticsGuards()
+                  }
                 },
         applyPlayerStatusOverlay(state) {
                   if (typeof document === 'undefined') {
