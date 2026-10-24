@@ -812,7 +812,20 @@
                       return viewOf(value)
                     },
                     set(object, key, value) {
-                      overlay(object).set(key, value)
+                      let entries = overlay(object)
+                      if (Array.isArray(object) && typeof key === 'string') {
+                        // keep array length rules: shortening drops the entries past the new end, writing
+                        // past the end grows the array
+                        let length = handler.get(object, 'length')
+                        if (key === 'length') {
+                          for (let i = Number(value); i < length; i += 1) {
+                            entries.set(String(i), removed)
+                          }
+                        } else if (/^(0|[1-9]\d*)$/.test(key) && Number(key) >= length) {
+                          entries.set('length', Number(key) + 1)
+                        }
+                      }
+                      entries.set(key, value)
                       return true
                     },
                     deleteProperty(object, key) {
