@@ -14,7 +14,7 @@
       let previousDebugSectionOptions = window.corSociety.debugSectionOptions
       Object.assign(window.corSociety, {
         currentSchemaVersion() {
-          return 7
+          return 8
         },
         runSocietyMigrations(society, state) {
           if (!society || typeof society !== 'object') {
@@ -74,6 +74,11 @@
             if (this.wipeUnwarnedLudiAmbitus) this.wipeUnwarnedLudiAmbitus(society)
             society.schemaVersion = 7
             current = 7
+          }
+          if (current < 8 && current >= 7 && gameState) {
+            if (this.restoreBridesToTheirGens) this.restoreBridesToTheirGens(society, gameState)
+            society.schemaVersion = 8
+            current = 8
           }
           if (gameState && society.schemaVersion < target) {
             society.schemaVersion = target

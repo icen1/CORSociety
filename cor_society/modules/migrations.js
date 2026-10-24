@@ -206,6 +206,68 @@
             }
           })
           return wiped
+        },
+        restoreBridesToTheirGens(society, state) {
+          // Step 8. normalizeGeneratedPeople moved generated brides living in the player's house into the
+          // player's gens. The game then gave their children the gens's adoption agnomen ('Tullianus',
+          // 'Tullia'): a mother of the household's gens counts as a matrilineal marriage. A bride whose
+          // old house record names her gens returns to it, and children of the gens born to a father of
+          // the gens lose an agnomen made from their own nomen.
+          let playerDynastyId = String(this.currentCharacterDynastyId(state) || '')
+          let characters = (state && state.characters) || {}
+          if (!society || !playerDynastyId || !state.dynasties) {
+            return 0
+          }
+          let inGens = (character) => !!character && String(character.dynastyId || '') === playerDynastyId
+          let origins = {}
+          ;[society.houses || {}, society.deadHouses || {}].forEach((houses) => {
+            Object.keys(houses).forEach((houseId) => {
+              let house = houses[houseId]
+              let dynastyId = house && String(this.gameDynastyIdForHouse(house) || '')
+              if (!dynastyId || dynastyId === playerDynastyId || !state.dynasties[dynastyId]) {
+                return
+              }
+              ;['memberIds', 'knownMemberIds', 'deadMemberIds', 'notableIds'].forEach((key) => {
+                ;(house[key] || []).forEach((characterId) => {
+                  origins[String(characterId)] = origins[String(characterId)] || dynastyId
+                })
+              })
+            })
+          })
+          let changed = 0
+          Object.keys(characters).forEach((characterId) => {
+            let character = characters[characterId]
+            let spouse = character && characters[character.spouseId]
+            let bornInGens = character && (inGens(characters[character.fatherId]) || inGens(characters[character.motherId]))
+            let origin = origins[String(characterId)]
+            if (!inGens(character) || !character.corSocietyGenerated || character.corSocietyPlayerTreeRole || !inGens(spouse) || bornInGens || !origin) {
+              return
+            }
+            try {
+              daapi.updateCharacter({ characterId, character: { dynastyId: origin } })
+              changed += 1
+            } catch (err) {
+              console.warn(err)
+            }
+          })
+          let nomen = String((state.dynasties[playerDynastyId] || {}).nomen || '')
+          let stem = nomen.substr(0, nomen.lastIndexOf('i')) || nomen.substr(0, nomen.lastIndexOf('u')) || nomen.substr(0, nomen.lastIndexOf('a')) || nomen
+          Object.keys(characters).forEach((characterId) => {
+            let character = characters[characterId]
+            if (!nomen || !inGens(character) || !character.agnomen || !inGens(characters[character.fatherId])) {
+              return
+            }
+            if (character.agnomen !== stem + 'ianus' && character.agnomen !== stem + 'ia') {
+              return
+            }
+            try {
+              daapi.updateCharacter({ characterId, character: { agnomen: '' } })
+              changed += 1
+            } catch (err) {
+              console.warn(err)
+            }
+          })
+          return changed
         }
       })
       window.corSociety._mixinCorSocietyMigrationsVersion = '1.1.331'

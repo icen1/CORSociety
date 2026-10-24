@@ -1332,7 +1332,10 @@
                     if (character.corSocietyHouseId && society.houses && society.houses[character.corSocietyHouseId]) {
                       let house = society.houses[character.corSocietyHouseId]
                       let dynastyId = this.gameDynastyIdForHouse(house)
-                      if (dynastyId && character.dynastyId !== dynastyId) {
+                      // Nobody joins the player's gens this way: a generated bride living in the player's
+                      // house keeps her own (in the game a spouse never changes gens), or her children
+                      // would be born with an adoption agnomen of their own gens ('Tullianus').
+                      if (dynastyId && character.dynastyId !== dynastyId && String(dynastyId) !== String(this.currentCharacterDynastyId(state) || '')) {
                         patch.dynastyId = dynastyId
                       }
                     }
