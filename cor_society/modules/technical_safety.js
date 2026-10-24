@@ -138,7 +138,10 @@
           pruneCrimeBuckets(society.crimes || {}, true)
           Object.keys(society.pendingTrials || {}).forEach((characterId) => {
             let trial = society.pendingTrials[characterId]
-            if (!characterExists(characterId) || (trial && trial.until && state && this.monthKeyReached(trial.until, state))) {
+            // The monthly audit gives the verdict when the court sits (until); only a trial left long
+            // after that is dropped. Dropping it on the day itself, before the audit, acquitted
+            // everyone the court was waiting for.
+            if (!characterExists(characterId) || (trial && trial.until && state && this.monthIndex(this.monthKey(state)) >= this.monthIndex(trial.until) + 3)) {
               delete society.pendingTrials[characterId]
               changed = true
             }
