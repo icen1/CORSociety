@@ -588,9 +588,12 @@
                         self.perfCount('daapiWrite')
                       }
                       holder.value = null
+                      // the game's character rebuild this write triggers is coalesced (installRefreshCoalescer)
+                      self._daapiWriteDepth = (self._daapiWriteDepth || 0) + 1
                       try {
                         return fn.apply(this, args)
                       } finally {
+                        self._daapiWriteDepth -= 1
                         holder.value = null
                       }
                     }
@@ -600,6 +603,23 @@
                     })
                     daapi[key] = wrapped
                   })
+                  // A redraw request changes nothing the mod reads, but the game answers it with the same
+                  // whole-`characters` rebuild as a write: count it as a daapi call so it is coalesced too.
+                  if (typeof daapi.forceUpdateCharacterDisplay === 'function') {
+                    let redraw = daapi.forceUpdateCharacterDisplay
+                    let wrappedRedraw = function() {
+                      self._daapiWriteDepth = (self._daapiWriteDepth || 0) + 1
+                      try {
+                        return redraw.apply(this, arguments)
+                      } finally {
+                        self._daapiWriteDepth -= 1
+                      }
+                    }
+                    Object.keys(redraw).forEach((prop) => {
+                      wrappedRedraw[prop] = redraw[prop]
+                    })
+                    daapi.forceUpdateCharacterDisplay = wrappedRedraw
+                  }
                   let clock = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now())
                   let take = (target, args) => {
                     let live = !(typeof window !== 'undefined' && window.corSocietyDisableLiveState) && self.liveGameState()
@@ -635,6 +655,91 @@
                   if (this._stateSnapshotHolder) {
                     this._stateSnapshotHolder.value = null
                   }
+                },
+        installRefreshCoalescer(store) {
+                  // Every character write through daapi makes the game dispatch forceUpdateCharacter, which
+                  // rebuilds the whole `characters` object (a copy of every key, made reactive again) and
+                  // re-renders whatever shows characters: dozens to hundreds of times in one month. While a
+                  // daapi call runs, that dispatch only records the character; the task's end (a microtask)
+                  // runs the game's rebuild once for all of them. The game's own dispatches stay immediate.
+                  // window.corSocietyDisableRefreshCoalescing = true turns it off.
+                  if (!store) {
+                    let root = this.findGameVueRoot ? this.findGameVueRoot() : null
+                    store = root && root.$store
+                  }
+                  let entry = store && store._actions && store._actions.forceUpdateCharacter
+                  if (!entry || typeof entry[0] !== 'function') {
+                    return false
+                  }
+                  if (entry[0].__corSocietyCoalescer) {
+                    return true
+                  }
+                  let self = this
+                  let original = entry[0]
+                  let coalesced = function(characterId) {
+                    if (!(self._daapiWriteDepth > 0) || (typeof window !== 'undefined' && window.corSocietyDisableRefreshCoalescing)) {
+                      return original.apply(this, arguments)
+                    }
+                    let pending = self._pendingRebuild
+                    if (!pending || pending.store !== store || pending.state !== store.state) {
+                      pending = { store, state: store.state, original, ids: new Set() }
+                      self._pendingRebuild = pending
+                    }
+                    pending.ids.add(String(characterId))
+                    if (self.perfCount) {
+                      self.perfCount('rebuildRequested')
+                    }
+                    if (!self._holdRebuilds && !self._rebuildFlushScheduled) {
+                      self._rebuildFlushScheduled = true
+                      Promise.resolve().then(() => {
+                        self._rebuildFlushScheduled = false
+                        self.flushCoalescedRefreshes()
+                      })
+                    }
+                    return Promise.resolve()
+                  }
+                  coalesced.__corSocietyCoalescer = true
+                  entry[0] = coalesced
+                  return true
+                },
+        flushCoalescedRefreshes() {
+                  // Runs the game's character rebuild once for every character recorded since the last flush.
+                  // Records belong to the game state they were made in: after a save load they are dropped.
+                  let killed = typeof window !== 'undefined' && window.corSocietyDisableRefreshCoalescing
+                  let pending = this._pendingRebuild
+                  if (!pending || (this._holdRebuilds && !killed)) {
+                    return 0
+                  }
+                  this._pendingRebuild = null
+                  if (pending.store.state !== pending.state) {
+                    return 0
+                  }
+                  let characters = (pending.state && pending.state.characters) || {}
+                  let ids = Array.from(pending.ids).filter((id) => characters[id])
+                  if (!ids.length) {
+                    return 0
+                  }
+                  try {
+                    // the game marks each changed character (charHash) and rebuilds once, for the last one
+                    ids.slice(0, -1).forEach((id) => {
+                      characters[id].charHash = Math.random()
+                    })
+                    pending.original.call(pending.store, ids[ids.length - 1])
+                    if (this.perfCount) {
+                      this.perfCount('rebuildRun')
+                    }
+                  } catch (err) {
+                    console.warn(err)
+                  }
+                  return ids.length
+                },
+        holdCoalescedRefreshes(on) {
+                  // While held (a month being processed), rebuilds wait; releasing runs them once.
+                  this._holdRebuilds = !!on
+                  if (!on) {
+                    return this.flushCoalescedRefreshes()
+                  }
+                  return 0
                 },
         STATE_VIEW: typeof Symbol === 'function' ? Symbol('corSocietyStateView') : '__corSocietyStateView',
         liveGameState() {

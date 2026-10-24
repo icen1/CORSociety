@@ -38,6 +38,9 @@
         if (window.corSociety.installStateSnapshotCache) {
           window.corSociety.installStateSnapshotCache()
         }
+        if (window.corSociety.installRefreshCoalescer) {
+          window.corSociety.installRefreshCoalescer()
+        }
         if (window.corSociety.installGameErrorLogGuard) {
           window.corSociety.installGameErrorLogGuard()
         }
@@ -72,6 +75,9 @@
       daapi.invokeMethod({ event: '/cor_society/engine', method: 'applyRefactorMixins' })
       if (window.corSociety.installStateSnapshotCache) {
         window.corSociety.installStateSnapshotCache()
+      }
+      if (window.corSociety.installRefreshCoalescer) {
+        window.corSociety.installRefreshCoalescer()
       }
       if (window.corSociety.installGameErrorLogGuard) {
         window.corSociety.installGameErrorLogGuard()

@@ -543,6 +543,9 @@
                   if (this.installPoliticsGuards) {
                     this.installPoliticsGuards()
                   }
+                  if (this.installRefreshCoalescer) {
+                    this.installRefreshCoalescer()
+                  }
                   if (this.perfTime) {
                     this.perfTime('overlayTick', clock() - started)
                   }
