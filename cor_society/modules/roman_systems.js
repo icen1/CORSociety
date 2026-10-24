@@ -113,6 +113,8 @@
             openStealHouse: 'openStealHouse',
             stealFromHouse: 'stealFromHouse',
             denounceCrime: 'denounceCrime',
+            openTrialDefence: 'openTrialDefence',
+            chooseTrialDefence: 'chooseTrialDefence',
             payFine: 'payFine',
             bribeJailer: 'bribeJailer',
             attemptEscape: 'attemptEscape',
@@ -305,9 +307,187 @@
             until: this.futureMonthKey(2)
           }
           this.log(society, name + ' is accused of ' + def.latin + ' (' + def.label + ').', 'scandal', character ? this.houseIdForCharacter(character, state, society) : '')
-          if (!this.sameCharacterId(characterId, currentId)) {
+          let household = ((state.current && state.current.householdCharacterIds) || []).map(String)
+          if (this.sameCharacterId(characterId, currentId) || household.indexOf(String(characterId)) >= 0) {
+            // The player and their household have until the court sits to prepare a defence.
+            this.offerTrialDefence(society, state, characterId)
+          } else {
             this.resolveTrial(society, state, characterId, 'npc')
           }
+          return true
+        },
+        trialAcquittalChance(society, state, characterId, approach, defenderId) {
+          // The accused's own eloquence and a friendly house help a little; a bribe or a public
+          // defence help more, up to 75%, and a plea by someone of the household up to 90%. A trial
+          // saved with the older 'self' choice is pleaded by the player.
+          let character = state.characters && state.characters[characterId]
+          let skills = (character && character.skills) || {}
+          let houseId = character ? this.houseIdForCharacter(character, state, society) : ''
+          let house = houseId && society.houses ? society.houses[houseId] : false
+          let defense = 0.12 + (parseFloat(skills.eloquence || 0) / 450)
+          if (approach === 'bribe') defense += 0.24
+          if (approach === 'publicDefense') defense += 0.16
+          if (approach === 'plead' || approach === 'self') {
+            let pleader = (state.characters && state.characters[approach === 'self' ? this.currentCharacterId(state) : defenderId]) || {}
+            defense += parseFloat((pleader.skills || {}).eloquence || 0) * 0.015
+          }
+          if (house && house.relation > 30) defense += 0.06
+          let plea = approach === 'plead' || approach === 'self'
+          let chosen = plea || approach === 'bribe' || approach === 'publicDefense'
+          return this.clamp(defense, 0.04, plea ? 0.9 : chosen ? 0.75 : 0.55)
+        },
+        trialDefenceCosts(society, state, characterId) {
+          // A bribe costs three times the fine the court would impose, at political prices; a public
+          // defence costs influence by the player's station.
+          let catalog = this.crimeCatalog()
+          let trial = (society.pendingTrials || {})[characterId] || {}
+          let def = catalog[trial.type] || catalog.tax_fraud
+          let fine = Math.round(Math.max(20, parseFloat(trial.amount || 60)) * (def.fine || 1))
+          let level = this.socialLevel(this.playerStratum(state))
+          return {
+            fine,
+            bribe: this.politicalPrice ? this.politicalPrice(fine * 3) : fine * 3,
+            influence: [10, 15, 25, 40, 70, 120][level] || 40
+          }
+        },
+        pleadsInCourt(character) {
+          // Pleading needs judicial oratory (the game's rhetor education) or a lawyer's work.
+          return !!character && ((character.traits || []).indexOf('oratorJudicial') >= 0 || character.job === 'lawyer')
+        },
+        canPleadNow(society, state, characterId) {
+          let character = state.characters && state.characters[characterId]
+          return !!character && !character.isDead && !character.flagIsAway && this.age(character, state) >= 16 &&
+            this.pleadsInCourt(character) && !this.isImprisonedBySociety(society, characterId, state)
+        },
+        trialPleaders(society, state) {
+          // Up to four of the household (the player and the accused included) who can plead now, the
+          // most eloquent first.
+          let current = state.current || {}
+          let eloquence = (id) => parseFloat((((state.characters || {})[id] || {}).skills || {}).eloquence || 0)
+          return this.uniqueIds([String(this.currentCharacterId(state))].concat((current.householdCharacterIds || []).map(String)))
+            .filter((id) => this.canPleadNow(society, state, id))
+            .sort((a, b) => eloquence(b) - eloquence(a))
+            .slice(0, 4)
+        },
+        offerTrialDefence(society, state, characterId) {
+          let trial = (society.pendingTrials || {})[characterId]
+          if (!trial) return false
+          let catalog = this.crimeCatalog()
+          let def = catalog[trial.type] || catalog.tax_fraud
+          let character = (state.characters && state.characters[characterId]) || {}
+          let self = this.sameCharacterId(characterId, this.currentCharacterId(state))
+          let link = '[c|' + characterId + '|' + (character.praenomen || 'The accused') + ']'
+          let costs = this.trialDefenceCosts(society, state, characterId)
+          let currentId = this.currentCharacterId(state)
+          let odds = (approach, defenderId) => 'acquittal chance about ' + Math.round(this.trialAcquittalChance(society, state, characterId, approach, defenderId) * 100) + '%.'
+          let months = Math.max(1, this.monthsUntil(trial.until, state))
+          let penalty = 'If convicted: a fine of ' + costs.fine + (def.jail ? ', ' + def.jail + ' months in prison' : '') + (def.disableOffice ? ' and no office for 3 years' : '') + '.'
+          let choose = (approach, defenderId) => ({ event: this.event, method: 'romanSystemsAction', context: { action: 'chooseTrialDefence', characterId, approach, defenderId } })
+          let possessive = (person) => this.characterIsMale(person) ? 'his' : person.gender === 'female' || person.isMale === false ? 'her' : 'their'
+          let accusedName = self ? 'you' : (character.praenomen || 'the accused')
+          let pleas = this.trialPleaders(society, state).map((defenderId) => {
+            let defender = (state.characters && state.characters[defenderId]) || {}
+            let you = this.sameCharacterId(defenderId, currentId)
+            let own = this.sameCharacterId(defenderId, characterId)
+            let speaker = you ? 'you' : (defender.praenomen || 'a kinsman')
+            return {
+              text: own ? (you ? 'Plead your own case' : speaker + ' pleads ' + possessive(defender) + ' own case') : (you ? 'You plead for ' + accusedName : speaker + ' pleads for ' + accusedName),
+              tooltip: 'Consequences: ' + (you ? 'you speak' : speaker + ' speaks') + ' for the defence before the court; ' + (you ? 'your' : possessive(defender)) + ' eloquence counts; ' + odds('plead', defenderId),
+              icons: [this.lawIcon('law')],
+              action: choose('plead', defenderId)
+            }
+          })
+          if (!pleas.length) {
+            pleas.push({
+              text: 'Plead in court',
+              disabled: true,
+              showDisabledWithTooltip: 'Nobody in your household who is free to speak is a judicial orator (rhetor education in judicial oratory) or a lawyer.',
+              icons: [this.lawIcon('law')],
+              action: choose('plead')
+            })
+          }
+          this.pushModal({
+            title: 'Trial for ' + def.latin,
+            message: (self ? 'You are' : link + ' is') + ' accused of ' + def.latin + ' (' + def.label + '). The court sits in ' + months + (months === 1 ? ' month. ' : ' months. ') + penalty,
+            image: this.lawIcon('law'),
+            options: pleas.concat([
+              {
+                variant: 'warning',
+                text: 'Bribe the jurors (' + costs.bribe + ' cash)',
+                tooltip: 'Consequences: -' + costs.bribe + ' cash now; ' + odds('bribe'),
+                icons: [this.affairIcon('coins')],
+                action: choose('bribe')
+              },
+              {
+                variant: 'info',
+                text: 'Hire a public defence (' + costs.influence + ' influence)',
+                tooltip: 'Consequences: -' + costs.influence + ' influence now; a patron pleads in the forum; ' + odds('publicDefense'),
+                icons: [this.affairIcon('support')],
+                action: choose('publicDefense')
+              },
+              {
+                text: 'Leave it to the court',
+                tooltip: 'Consequences: no cost; ' + odds('default'),
+                action: choose('default')
+              }
+            ])
+          })
+          return true
+        },
+        openTrialDefence({ characterId } = {}) {
+          let society = this.loadForAction()
+          if (!this.offerTrialDefence(society, daapi.getState(), characterId)) {
+            this.openCrimes()
+          }
+        },
+        chooseTrialDefence({ characterId, approach, defenderId } = {}) {
+          let society = this.loadForAction()
+          let state = daapi.getState()
+          let trial = (society.pendingTrials || {})[characterId]
+          if (!trial || ['plead', 'bribe', 'publicDefense', 'default'].indexOf(approach) < 0) {
+            return false
+          }
+          let character = (state.characters && state.characters[characterId]) || {}
+          let name = this.sameCharacterId(characterId, this.currentCharacterId(state)) ? 'your' : (character.praenomen || 'the accused') + "'s"
+          if (trial.approach) {
+            this.log(society, 'The defence for ' + name + ' trial is already prepared.', 'law')
+            this.save(society)
+            return false
+          }
+          let costs = this.trialDefenceCosts(society, state, characterId)
+          let current = state.current || {}
+          if (approach === 'plead' && this.trialPleaders(society, state).indexOf(String(defenderId)) < 0) {
+            return false
+          }
+          if (approach === 'bribe') {
+            if (parseFloat(current.cash || 0) < costs.bribe) {
+              this.log(society, 'You cannot afford to bribe the jurors (' + costs.bribe + ' cash).', 'law')
+              this.save(society)
+              return false
+            }
+            this.applyStats({ cash: -costs.bribe })
+          }
+          if (approach === 'publicDefense') {
+            if (parseFloat(current.influence || 0) < costs.influence) {
+              this.log(society, 'You lack the influence for a public defence (' + costs.influence + ').', 'law')
+              this.save(society)
+              return false
+            }
+            this.applyStats({ influence: -costs.influence })
+          }
+          trial.approach = approach
+          if (approach === 'plead') {
+            trial.defenderId = defenderId
+          }
+          let defender = (state.characters && state.characters[defenderId]) || {}
+          let text = {
+            plead: (this.sameCharacterId(defenderId, this.currentCharacterId(state)) ? 'You' : (defender.praenomen || 'A kinsman')) + ' will plead ' + name + ' case.',
+            bribe: 'The jurors in ' + name + ' trial are quietly paid.',
+            publicDefense: 'A patron will plead ' + name + ' case in the forum.',
+            default: name.charAt(0).toUpperCase() + name.slice(1) + ' case is left to the court.'
+          }[approach]
+          this.log(society, text, 'law')
+          this.save(society)
           return true
         },
         resolveTrial(society, state, characterId, approach) {
@@ -316,14 +496,15 @@
           let catalog = this.crimeCatalog()
           let def = catalog[trial.type] || catalog.tax_fraud
           let character = state.characters && state.characters[characterId]
-          let skills = (character && character.skills) || {}
           let houseId = character ? this.houseIdForCharacter(character, state, society) : ''
           let house = houseId && society.houses ? society.houses[houseId] : false
-          let defense = 0.12 + (parseFloat(skills.eloquence || 0) / 450)
-          if (approach === 'bribe') defense += 0.24
-          if (approach === 'publicDefense') defense += 0.16
-          if (house && house.relation > 30) defense += 0.06
-          if (Math.random() < this.clamp(defense, 0.04, 0.55)) {
+          let defenderId = approach === 'self' ? this.currentCharacterId(state) : trial.defenderId
+          if ((approach === 'plead' || approach === 'self') && !this.canPleadNow(society, state, defenderId)) {
+            let defender = (state.characters && state.characters[defenderId]) || {}
+            this.log(society, (defender.praenomen || 'The chosen speaker') + ' cannot plead any more; the court decides alone.', 'law', houseId)
+            approach = 'default'
+          }
+          if (Math.random() < this.trialAcquittalChance(society, state, characterId, approach, defenderId)) {
             if (house) house.relation = this.clamp((house.relation || 0) + 4, -100, 100)
             delete society.pendingTrials[characterId]
             this.log(society, (character ? this.characterName({ ...character, id: characterId }, state) : 'The accused') + ' is acquitted of ' + def.latin + '.', 'law', houseId)
@@ -411,6 +592,20 @@
             }
           })
           let options = []
+          let household = ((state.current && state.current.householdCharacterIds) || []).map(String)
+          Object.keys(society.pendingTrials || {}).forEach((characterId) => {
+            let trial = society.pendingTrials[characterId]
+            let self = this.sameCharacterId(characterId, currentId)
+            if (!trial || trial.approach || (!self && household.indexOf(String(characterId)) < 0)) return
+            let accused = (state.characters && state.characters[characterId]) || {}
+            options.push({
+              variant: 'warning',
+              text: 'Prepare the defence of ' + (self ? 'yourself' : (accused.praenomen || 'the accused')),
+              tooltip: 'Consequences: opens the trial: plead in person, bribe the jurors, a public defence or leave it to the court.',
+              icons: [this.lawIcon('law')],
+              action: { event: this.event, method: 'romanSystemsAction', context: { action: 'openTrialDefence', characterId } }
+            })
+          })
           if (conviction && conviction.fine && !conviction.paid) {
             options.push({
               variant: 'info',
@@ -2189,7 +2384,7 @@
           Object.keys(society.pendingTrials || {}).forEach((characterId) => {
             let trial = society.pendingTrials[characterId]
             if (trial && trial.until && this.monthKeyReached(trial.until, state)) {
-              this.resolveTrial(society, state, characterId, 'default')
+              this.resolveTrial(society, state, characterId, trial.approach || 'default')
             }
           })
         },
