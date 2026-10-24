@@ -115,8 +115,10 @@
         installFamilyGuards(root) {
           // Two of the game's store actions are wrapped. invokeMethod: 'Move out?' on someone the share
           // calculator cannot reach is offered without a payment. performMarriage: the marriage screen's
-          // 'give away share of inheritance' never charges the whole estate either. Both wrappers call
-          // the current window.corSociety, so a new boot never leaves them on an old object.
+          // choices (installMarriageScreenChoices) are applied, and its share never charges the whole
+          // estate. Both wrappers call the current window.corSociety, so a new boot never leaves them
+          // on an old object.
+          root = root || (this.findGameVueRoot ? this.findGameVueRoot() : null)
           let store = this.familyStore(root)
           let actions = store && store._actions
           if (!actions) {
@@ -159,7 +161,213 @@
             guarded.__corSocietyFamilyGuard = true
             marriage[0] = guarded
           }
+          this.installMarriageScreenChoices(root)
           return true
+        },
+        installMarriageScreenChoices(root) {
+          // The game's marriage screen (route MarriageView) offers a matrilineal match and one 'give away
+          // share of inheritance' that both pays the share and moves the couple out. Its render is wrapped
+          // so the second becomes two choices: the share, and the household. The wrapper is set on the
+          // component and on any constructor Vue already built from it (Vue reads render from there).
+          let routes = (root && root.$router && root.$router.options && root.$router.options.routes) || []
+          let route = routes.find((item) => item && item.name === 'MarriageView')
+          let options = route && route.component
+          if (!options || typeof options !== 'object') {
+            return false
+          }
+          let targets = [options]
+          Object.keys(options._Ctor || {}).forEach((key) => {
+            if (options._Ctor[key] && options._Ctor[key].options) {
+              targets.push(options._Ctor[key].options)
+            }
+          })
+          let installer = this
+          targets.forEach((target) => {
+            if (typeof target.render !== 'function' || target.render.__corSocietyMarriageChoices) {
+              return
+            }
+            let original = target.render
+            let render = function(h) {
+              let vnode = original.apply(this, arguments)
+              try {
+                let society = window.corSociety || installer
+                society.decorateMarriageScreen(this, vnode, h || this.$createElement)
+              } catch (err) {
+                console.warn(err)
+              }
+              return vnode
+            }
+            render.__corSocietyMarriageChoices = true
+            target.render = render
+          })
+          return true
+        },
+        marriageScreenChoices(vm, state) {
+          // One set of choices per visit to the screen (a new component instance starts unticked).
+          let current = state && state.current
+          let characterId = state && state.selectedMarriageCharacterId
+          if (!current || !characterId || !state.characters || !state.characters[characterId] || String(characterId) === String(current.id) ||
+            (current.householdCharacterIds || []).indexOf(characterId) < 0) {
+            return null
+          }
+          let choices = this._marriageChoices
+          if (!choices || choices.vm !== vm || choices.characterId !== characterId) {
+            choices = this._marriageChoices = { vm, characterId, share: false, startOwn: false, armed: false }
+          }
+          return choices
+        },
+        marriageScreenView(vm, state, choices) {
+          let current = state.current
+          let character = state.characters[choices.characterId]
+          let name = character.praenomen || 'They'
+          let isHeir = String(current.flagDesignatedHeirId || '') === String(choices.characterId)
+          let shareBlock = current.flagIsDebtSlave ? 'A debtor has no patrimony to hand out.'
+            : isHeir ? 'Your designated heir will inherit everything; there is no share to give early.'
+              : !this.inheritanceShareReachable(state, choices.characterId) ? 'No share is left for ' + name + ': they, or the parent they would inherit through, were already paid or disinherited.' : ''
+          // Only a child whose children carry your name stays at home: when the match gives the children the
+          // spouse's name, the child joins the spouse's household (shown ticked and locked).
+          let leavesByMatch = this.marriageLeavesByMatch(character, vm.isMatrilineal)
+          let household = leavesByMatch
+            ? {
+              key: 'joinTheirs',
+              label: 'Join their household?',
+              text: name + " moves into the spouse's household and is no longer a playable heir, since the children of this match take the spouse's name. To keep " + name + ' at home, ' + (vm.isMatrilineal ? 'choose a usual match' : 'look for a matrilineal match') + '.',
+              block: '',
+              locked: true
+            }
+            : {
+              key: 'startOwn',
+              label: 'Start your own household?',
+              text: name + ' and the new spouse set up a household of their own, and ' + name + ' is no longer a playable heir. Without an early share, their claim on your estate stays as it is.',
+              block: isHeir ? 'Your designated heir stays with you; designate another heir first.' : ''
+            }
+          return {
+            name,
+            leavesByMatch,
+            share: {
+              key: 'share',
+              label: 'Give their share of the inheritance now?',
+              text: 'Pay ' + name + ' their share of the patrimony now. They stay with you unless they also leave, and receive nothing more at your death.',
+              block: shareBlock,
+              cost: shareBlock ? null : vm.makeMoveOutCost
+            },
+            household
+          }
+        },
+        marriageChoiceColumn(h, vm, choices, item) {
+          let checked = !!item.locked || (!item.block && !!choices[item.key])
+          let text = [item.block || item.text]
+          if (!item.block && item.cost) {
+            text.push(' ', h('StatChangesComponent', { staticClass: 'btn btn-sm margin-0 padding-0 text-left', attrs: { statChanges: item.cost, scaleByClass: false } }))
+          }
+          return h('b-col', { staticClass: 'align-self-center mt-2 mb-2', attrs: { sm: '12', md: '4' } }, [
+            h('div', [
+              h('b-form-checkbox', {
+                staticClass: 'js-checkbox-cor-society-' + item.key,
+                attrs: { size: 'sm', value: 1, 'unchecked-value': 0, disabled: !!(item.block || item.locked) },
+                model: {
+                  value: checked ? 1 : 0,
+                  callback: (value) => {
+                    choices[item.key] = !!value && value !== '0'
+                    if (vm && typeof vm.$forceUpdate === 'function') {
+                      vm.$forceUpdate()
+                    }
+                  },
+                  expression: 'corSocietyMarriage_' + item.key
+                }
+              }, [item.label]),
+              h('b-form-text', text)
+            ])
+          ])
+        },
+        marriageSummaryParts(h, vm, state, view, choices) {
+          let spouse = state.characters[vm.selectedSpouseId] || {}
+          let spouseName = spouse.praenomen || 'The spouse'
+          let gens = [vm.selectedSpouseDyansty.nomen, vm.selectedSpouseDyansty.cognomen].filter(Boolean).join(' ')
+          let joining = vm.isMatrilineal ? 'adopted into ' : 'of '
+          let name = view.name
+          let parts = []
+          if (view.leavesByMatch) {
+            parts.push(h('b', [name + ' will leave your household']), ' for ' + spouseName + "'s and will no longer be a playable heir. The children of this union will be " + joining + gens + '.')
+          } else if (choices.startOwn && !view.household.block) {
+            parts.push(h('b', [name + ' and ' + spouseName + ' will start a household of their own']), ', and ' + name + ' will no longer be a playable heir.')
+          } else {
+            parts.push(spouseName + ' will join your household and any future children with ' + name + ' will be ' + joining + 'your Dynasty/gens.')
+          }
+          if (choices.share && !view.share.block) {
+            parts.push(h('br'), name + ' receives their share of the inheritance now, and nothing more at your death. ',
+              h('StatChangesComponent', { staticClass: 'btn btn-sm margin-0 padding-0', attrs: { statChanges: view.share.cost, scaleByClass: false } }))
+          }
+          return parts
+        },
+        decorateMarriageScreen(vm, vnode, h) {
+          // Finds the game's matrilineal checkbox and its row, drops the game's combined checkbox (the
+          // column whose v-model is makeMoveOut), adds the share and household columns, and rewrites the
+          // confirmation text. BootstrapVue's b-row and b-col are functional components, so they arrive
+          // already rendered as plain divs (the row with staticClass 'row', a column with col-md-<n>
+          // classes). A screen that has changed shape is left as the game draws it, and its choices are
+          // not applied.
+          let state = vm && vm.$store && vm.$store.state
+          let choices = this.marriageScreenChoices(vm, state)
+          if (!choices) {
+            return vnode
+          }
+          choices.armed = false
+          let kids = (node) => (node && ((node.componentOptions && node.componentOptions.children) || node.children)) || []
+          let tagOf = (node) => (node && ((node.componentOptions && node.componentOptions.tag) || node.tag)) || ''
+          let find = (node, test, path) => {
+            if (!node || typeof node !== 'object') {
+              return null
+            }
+            path = (path || []).concat([node])
+            if (test(node)) {
+              return path
+            }
+            let children = kids(node)
+            for (let i = 0; i < children.length; i++) {
+              let found = find(children[i], test, path)
+              if (found) {
+                return found
+              }
+            }
+            return null
+          }
+          let anchor = find(vnode, (node) => !!(node.data && String(node.data.staticClass || '').indexOf('js-checkbox-matrilineal') >= 0))
+          let isRow = (node) => tagOf(node) === 'b-row' || /(^|\s)row(\s|$)/.test(String((node.data && node.data.staticClass) || ''))
+          let rowAt = anchor ? anchor.map(isRow).lastIndexOf(true) : -1
+          let row = rowAt >= 0 ? kids(anchor[rowAt]) : null
+          let column = rowAt >= 0 ? anchor[rowAt + 1] : null
+          if (!row || !column || row.indexOf(column) < 0) {
+            return vnode
+          }
+          for (let i = row.length - 1; i >= 0; i--) {
+            if (row[i] !== column && find(row[i], (node) => !!(node.data && node.data.model && node.data.model.expression === 'makeMoveOut'))) {
+              row.splice(i, 1)
+            }
+          }
+          let third = (value) => typeof value === 'string' ? value.replace(/\bcol-md-\d+\b/g, 'col-md-4')
+            : Array.isArray(value) ? value.map(third)
+              : value && typeof value === 'object' ? Object.keys(value).reduce((out, key) => {
+                out[third(key)] = value[key]
+                return out
+              }, {}) : value
+          if (column.componentOptions && column.componentOptions.propsData) {
+            column.componentOptions.propsData.md = '4'
+          } else if (column.data) {
+            column.data.class = third(column.data.class)
+          }
+          let view = this.marriageScreenView(vm, state, choices)
+          row.push(this.marriageChoiceColumn(h, vm, choices, view.share))
+          row.push(this.marriageChoiceColumn(h, vm, choices, view.household))
+          if (vm.selectedSpouseId && vm.selectedSpouseDyansty) {
+            let said = find(vnode, (node) => typeof node.text === 'string' && /will (leave|join) your household/.test(node.text))
+            let holder = said ? said[said.map(tagOf).lastIndexOf('div')] : null
+            if (holder && Array.isArray(holder.children)) {
+              holder.children = [h('span', this.marriageSummaryParts(h, vm, state, view, choices))]
+            }
+          }
+          choices.armed = true
+          return vnode
         },
         guardMoveOutClick(store, payload) {
           let method = payload && payload.method
@@ -226,8 +434,10 @@
         },
         marriagePlan(store, payload) {
           // Only the game's marriage screen sends makeMoveOut. Society's own marriages and the game's
-          // random ones never do, and are left to the game.
-          if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'makeMoveOut') || !payload.makeMoveOut) {
+          // random ones never do, and are left to the game. From a screen showing the mod's choices the
+          // plan follows them; from the game's own checkbox it only steps in where the share calculator
+          // would charge the whole estate.
+          if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'makeMoveOut')) {
             return null
           }
           let state = store && store.state
@@ -236,28 +446,70 @@
           let characterId = payload.characterId
           let household = (current && current.householdCharacterIds) || []
           if (!characters || !characters[characterId] || !characters[payload.spouseId] || String(characterId) === String(current.id) ||
-            household.indexOf(characterId) < 0 || household.indexOf(payload.spouseId) >= 0 || this.inheritanceShareReachable(state, characterId)) {
+            household.indexOf(characterId) < 0 || household.indexOf(payload.spouseId) >= 0) {
+            return null
+          }
+          let character = characters[characterId]
+          let leavesByMatch = this.marriageLeavesByMatch(character, payload.isMatrilineal)
+          let reachable = this.inheritanceShareReachable(state, characterId)
+          let isHeir = String(current.flagDesignatedHeirId || '') === String(characterId)
+          let choices = this._marriageChoices
+          let screen = !!(choices && choices.armed && choices.vm && !choices.vm._isDestroyed && String(choices.characterId) === String(characterId) &&
+            (!choices.vm.selectedSpouseId || String(choices.vm.selectedSpouseId) === String(payload.spouseId)))
+          let share = false
+          let leave = true
+          if (screen) {
+            share = !!choices.share && reachable && !isHeir && !current.flagIsDebtSlave
+            leave = leavesByMatch || (!!choices.startOwn && !isHeir)
+            choices.armed = false
+          } else if (!payload.makeMoveOut || reachable) {
             return null
           }
           return {
             payload,
             characterId,
             spouseId: payload.spouseId,
-            share: false,
-            leave: true,
-            leavesByMatch: this.marriageLeavesByMatch(characters[characterId], payload.isMatrilineal)
+            share,
+            leave,
+            leavesByMatch,
+            householdBefore: household.slice(),
+            formerBefore: (current.formerHouseholdCharacterIds || []).slice(),
+            movedOutBefore: !!character.hasMovedOut
           }
         },
         performPlannedMarriage(store, plan, run) {
           let result = run(Object.assign({}, plan.payload, { makeMoveOut: plan.share ? 1 : 0 }))
           try {
-            if (plan.leave && !plan.share && !plan.leavesByMatch) {
-              this.moveOutWithoutShareInStore(store, plan.characterId)
-            }
+            this.settleMarriageHousehold(store, plan)
           } catch (err) {
             console.warn(err)
           }
           return result
+        },
+        settleMarriageHousehold(store, plan) {
+          // After the game's performMarriage (with makeMoveOut set to the share): who lives where.
+          let current = store.state.current
+          let character = store.state.characters[plan.characterId]
+          if (!current || !character) {
+            return
+          }
+          if (plan.leave) {
+            if (!plan.share && !plan.leavesByMatch) {
+              this.moveOutWithoutShareInStore(store, plan.characterId)
+            }
+            // With a share the game moves the couple out but still adds the spouse to your household.
+            current.householdCharacterIds = (current.householdCharacterIds || []).filter((id) => String(id) !== String(plan.spouseId))
+            current.formerHouseholdCharacterIds = this.uniqueIds(current.formerHouseholdCharacterIds || [])
+          } else {
+            // The game moved them out to pay the share: they stay, and the spouse moves in.
+            character.hasMovedOut = plan.movedOutBefore
+            current.formerHouseholdCharacterIds = plan.formerBefore.slice()
+            current.householdCharacterIds = this.uniqueIds(plan.householdBefore.concat([plan.spouseId]))
+          }
+          store.dispatch('forceUpdateCharacter', plan.characterId)
+          if (this.invalidateStateSnapshot) {
+            this.invalidateStateSnapshot()
+          }
         }
       })
       window.corSociety._mixinCorSocietyFamilyVersion = '1.1.331'
