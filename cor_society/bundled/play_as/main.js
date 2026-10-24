@@ -1,20 +1,29 @@
-// Switch characters
+// Switch characters: offered on the living members of the player's household (the game's household
+// list), never on the played character. Roman Society's monthly sweep removes it from anyone who
+// leaves the household.
 {
   canTriggerIfUnavailable: true,
-  checkType: 'allCharacters',
+  checkType: 'householdCharacters',
   checkAndAct(characterId) {
     let character = daapi.getCharacter({ characterId })
+    let current = daapi.getState().current
+    let icon = daapi.requireImage('/cor_society/bundled/play_as/switch.svg')
+    let stored = character && character.actions && character.actions.play_as
     if (
-      characterId !== daapi.getState().current.id &&
+      String(characterId) !== String(current.id) &&
+      (current.householdCharacterIds || []).map(String).indexOf(String(characterId)) > -1 &&
       character &&
       !character.isDead
     ) {
+      if (stored && stored.icon === icon && stored.title === 'Play As') {
+        return
+      }
       daapi.addCharacterAction({
         characterId,
         key: 'play_as',
         action: {
           title: 'Play As',
-          icon: daapi.requireImage('/cor_society/bundled/play_as/switch.svg'),
+          icon,
           isAvailable: true,
           hideWhenBusy: false,
           process: {
@@ -26,7 +35,7 @@
           }
         }
       })
-    } else {
+    } else if (stored) {
       daapi.deleteCharacterAction({
         characterId,
         key: 'play_as'

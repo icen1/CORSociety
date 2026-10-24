@@ -49,29 +49,56 @@
             : 0
           return entry.base + pending
         },
-        stripDeadCharacterButtons(state) {
-          // The bundled murder and play_as sub-mods add a per-character button (with a ~3.8 KB inline
-          // SVG icon) to every living character and delete it when they see the character dead, but
-          // the game runs per-character events for the living only, so the dead kept them: 6.3 MB of
-          // a 12.2 MB state in a real save. Live store state, worker idle.
+        stripStaleCharacterButtons(state) {
+          // The bundled murder and play_as sub-mods store a per-character button, with its icon inline,
+          // and the game re-serializes them with the whole state on every save and month. The game runs
+          // per-character events for the living only, so the dead kept theirs (6.3 MB of a 12.2 MB state
+          // in a real save); Play As is now offered in the household only, and the murder icon is small.
+          // Bring every record in line: the dead lose both buttons, Play As stays only on household
+          // members other than the played character, and stored murder icons become the current one.
+          // Live store state, worker idle; written directly, so the game rebuilds nothing.
           if (typeof window !== 'undefined' && window.corSocietyDisableDeadButtonStrip) {
             return 0
           }
           let characters = (state && state.characters) || {}
-          let stripped = 0
+          let current = (state && state.current) || {}
+          let household = {}
+          ;(current.householdCharacterIds || []).forEach((id) => {
+            household[String(id)] = true
+          })
+          let murderIcon = ''
+          try {
+            murderIcon = this.daapiReady && this.daapiReady() ? daapi.requireImage('/cor_society/bundled/murder/plot.svg') || '' : ''
+          } catch (err) {
+            murderIcon = ''
+          }
+          let changed = 0
           Object.keys(characters).forEach((id) => {
             let character = characters[id]
-            let actions = character && character.isDead && character.actions
+            let actions = character && character.actions
             if (!actions || (!actions.mod_murder_startPlot && !actions.play_as)) {
               return
             }
-            let rest = Object.assign({}, actions)
-            delete rest.mod_murder_startPlot
-            delete rest.play_as
-            character.actions = rest
-            stripped += 1
+            let rest = null
+            let edit = () => rest || (rest = Object.assign({}, actions))
+            if (character.isDead) {
+              delete edit().mod_murder_startPlot
+              delete edit().play_as
+            } else {
+              if (actions.play_as && (!household[String(id)] || String(id) === String(current.id))) {
+                delete edit().play_as
+              }
+              let plot = actions.mod_murder_startPlot
+              if (plot && murderIcon && plot.icon !== murderIcon) {
+                edit().mod_murder_startPlot = Object.assign({}, plot, { icon: murderIcon })
+              }
+            }
+            if (rest) {
+              character.actions = rest
+              changed += 1
+            }
           })
-          return stripped
+          return changed
         },
         populationPruneProtectedIds(state, society) {
           // Who a yearly prune must keep: everyone alive, the household, former household and played
@@ -312,7 +339,7 @@
           if (this._deadButtonStripMonth !== month) {
             this._deadButtonStripMonth = month
             try {
-              if (this.stripDeadCharacterButtons(state) && this.invalidateStateSnapshot) {
+              if (this.stripStaleCharacterButtons(state) && this.invalidateStateSnapshot) {
                 this.invalidateStateSnapshot()
               }
             } catch (err) {

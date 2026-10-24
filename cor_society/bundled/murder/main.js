@@ -31,7 +31,7 @@
           }
         }
       })
-    } else {
+    } else if (character && character.actions && character.actions.mod_murder_startPlot) {
       daapi.deleteCharacterAction({ characterId, key: 'mod_murder_startPlot' })
     }
   },
