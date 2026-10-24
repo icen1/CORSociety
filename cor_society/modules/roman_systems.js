@@ -1188,7 +1188,7 @@
         releasePrisoner(society, characterId) {
           society.imprisoned = (society.imprisoned || []).filter((id) => !this.sameCharacterId(id, characterId))
           try { daapi.updateCharacter({ characterId, character: { flagIsBusy: false } }) } catch (err) { console.warn(err) }
-          try { daapi.setCharacterStatusActive({ characterId, key: 'cor_society_prison_status', isActive: false }) } catch (err) { console.warn(err) }
+          this.hideSocietyStatus(characterId, 'cor_society_prison_status')
         },
         applyVanillaMilitaryService(characterId, state, options) {
           options = options || {}
@@ -1299,15 +1299,10 @@
               console.warn(err)
             }
           })
-          ;(society.crimeStatusCharacterIds || []).forEach((characterId) => {
-            if (active[characterId]) return
-            try {
-              daapi.setCharacterStatusActive({ characterId, key: 'cor_society_prison_status', isActive: false })
-              delete this._crimeStatusHashCache[characterId]
-            } catch (err) {
-              try { daapi.deleteCharacterStatus({ characterId, key: 'cor_society_prison_status' }) } catch (innerErr) { console.warn(innerErr) }
-            }
+          Object.keys(this._crimeStatusHashCache).forEach((characterId) => {
+            if (!active[characterId]) delete this._crimeStatusHashCache[characterId]
           })
+          this.clearStaleSocietyStatuses(state, 'cor_society_prison_status', active)
           society.crimeStatusCharacterIds = Object.keys(active)
         },
         openRomanPower() {

@@ -202,19 +202,10 @@
                   })
                   previous.forEach((characterId) => {
                     if (!active[characterId]) {
-                      try {
-                        daapi.setCharacterStatusActive({ characterId, key: 'cor_society_relation', isActive: false })
-                        delete this._relationStatusHashCache[characterId]
-                      } catch (err) {
-                        try {
-                          daapi.deleteCharacterStatus({ characterId, key: 'cor_society_relation' })
-                          delete this._relationStatusHashCache[characterId]
-                        } catch (innerErr) {
-                          console.warn(innerErr)
-                        }
-                      }
+                      delete this._relationStatusHashCache[characterId]
                     }
                   })
+                  this.clearStaleSocietyStatuses(state, 'cor_society_relation', active)
                   society.relationStatusCharacterIds = Object.keys(active)
                 },
         syncSlaveStatuses(society, state) {
@@ -278,19 +269,11 @@
                     }
                   })
                   ;(society.slaveStatusCharacterIds || []).forEach((characterId) => {
-                    if (active[characterId]) return
-                    try {
-                      daapi.setCharacterStatusActive({ characterId, key: 'cor_society_slave_status', isActive: false })
+                    if (!active[characterId]) {
                       delete this._slaveStatusHashCache[characterId]
-                    } catch (err) {
-                      try {
-                        daapi.deleteCharacterStatus({ characterId, key: 'cor_society_slave_status' })
-                        delete this._slaveStatusHashCache[characterId]
-                      } catch (innerErr) {
-                        console.warn(innerErr)
-                      }
                     }
                   })
+                  this.clearStaleSocietyStatuses(state, 'cor_society_slave_status', active)
                   society.slaveStatusCharacterIds = Object.keys(active)
                 },
         slaveStatusTitle(character, record, state) {

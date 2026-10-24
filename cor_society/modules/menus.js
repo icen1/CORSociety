@@ -5385,11 +5385,7 @@
                     daapi.updateCharacter({ characterId: character.id, character: patch })
                     Object.assign(character, patch)
                     this.addChildToParent(state, father.id, character.id)
-                    try {
-                      daapi.setCharacterStatusActive({ characterId: character.id, key: 'cor_society_slave_status', isActive: false })
-                    } catch (statusErr) {
-                      console.warn(statusErr)
-                    }
+                    this.hideSocietyStatus(character.id, 'cor_society_slave_status')
                     daapi.forceUpdateCharacterDisplay({ characterId: character.id })
                   } catch (err) {
                     console.warn(err)
@@ -5585,11 +5581,7 @@
                         freedHouse.memberIds = freedHouse.memberIds || []
                         if (freedHouse.memberIds.indexOf(record.characterId) < 0) freedHouse.memberIds.push(record.characterId)
                       }
-                      try {
-                        daapi.setCharacterStatusActive({ characterId: record.characterId, key: 'cor_society_slave_status', isActive: false })
-                      } catch (statusErr) {
-                        console.warn(statusErr)
-                      }
+                      this.hideSocietyStatus(record.characterId, 'cor_society_slave_status')
                       daapi.forceUpdateCharacterDisplay({ characterId: record.characterId })
                     }
                   } catch (err) {

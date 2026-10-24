@@ -3239,10 +3239,10 @@
                     try {
                       daapi.updateCharacter({ characterId, character: patch })
                       Object.assign(character, patch)
-                      daapi.setCharacterStatusActive({ characterId, key: 'cor_society_slave_status', isActive: false })
+                      this.hideSocietyStatus(characterId, 'cor_society_slave_status')
                     } catch (err) {
                       try {
-                        daapi.deleteCharacterStatus({ characterId, key: 'cor_society_slave_status' })
+                        this.hideSocietyStatus(characterId, 'cor_society_slave_status')
                       } catch (innerErr) {
                         console.warn(innerErr)
                       }

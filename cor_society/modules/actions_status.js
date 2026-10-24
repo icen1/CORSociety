@@ -2091,6 +2091,32 @@
                   this.applyStats(refund)
                   return true
                 },
+        hideSocietyStatus(characterId, key) {
+                  // The game draws a character status only while its `active` is true, and its own
+                  // setCharacterStatusActive writes `isActive` instead, so it never hides one. Delete it.
+                  try {
+                    daapi.deleteCharacterStatus({ characterId, key })
+                    return true
+                  } catch (err) {
+                    console.warn(err)
+                    return false
+                  }
+                },
+        clearStaleSocietyStatuses(state, key, active) {
+                  // Everyone showing the status who should not: also the statuses older saves kept on
+                  // screen, on people no sync lists any more.
+                  let cleared = 0
+                  Object.keys((state && state.characters) || {}).forEach((characterId) => {
+                    let character = state.characters[characterId]
+                    if (active[characterId] || !character || !character.statuses || !character.statuses[key]) {
+                      return
+                    }
+                    if (this.hideSocietyStatus(characterId, key)) {
+                      cleared += 1
+                    }
+                  })
+                  return cleared
+                },
         runAction(method, args) {
                   args = args || {}
                   if (this.flushPendingMonthlyWork) {
