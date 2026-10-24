@@ -147,28 +147,34 @@
         transferPropertyToPlayer(society, state, targetHouse, key, amount) {
                   // Remove a real vanilla property from the rival house's holdings and grant it to the
                   // player's house (a genuine transfer between houses), returning the value moved.
-                  if (!targetHouse || !key) {
+                  return this.transferPropertyBetweenHouses(targetHouse, this.playerPoliticsHouse(society, state), key, amount)
+                },
+        transferPropertyBetweenHouses(fromHouse, toHouse, key, amount) {
+                  // Move `amount` units of a real vanilla property from one house's holdings to another
+                  // (toHouse may be missing: the property is then just lost). Returns the value moved.
+                  if (!fromHouse || !key) {
                     return 0
                   }
-                  this.normalizeHousePropertyDetails(targetHouse)
-                  targetHouse.ai = targetHouse.ai || {}
-                  targetHouse.ai.propertyDetails = targetHouse.ai.propertyDetails || {}
-                  let have = Math.round(parseFloat(targetHouse.ai.propertyDetails[key] || 0))
+                  this.normalizeHousePropertyDetails(fromHouse)
+                  fromHouse.ai = fromHouse.ai || {}
+                  fromHouse.ai.propertyDetails = fromHouse.ai.propertyDetails || {}
+                  let have = Math.round(parseFloat(fromHouse.ai.propertyDetails[key] || 0))
+                  if (have <= 0) {
+                    // Nothing left to take (a menu left open while the month moved on): moving 1 unit
+                    // anyway created the property out of nothing.
+                    return 0
+                  }
                   amount = Math.max(1, Math.min(parseInt(amount || 1, 10), have))
-                  if (amount <= 0) {
-                    return 0
+                  fromHouse.ai.propertyDetails[key] = have - amount
+                  if (fromHouse.ai.propertyDetails[key] <= 0) {
+                    delete fromHouse.ai.propertyDetails[key]
                   }
-                  targetHouse.ai.propertyDetails[key] = have - amount
-                  if (targetHouse.ai.propertyDetails[key] <= 0) {
-                    delete targetHouse.ai.propertyDetails[key]
-                  }
-                  this.normalizeHousePropertyDetails(targetHouse)
-                  let playerHouse = this.playerPoliticsHouse(society, state)
-                  if (playerHouse) {
-                    playerHouse.ai = playerHouse.ai || {}
-                    playerHouse.ai.propertyDetails = playerHouse.ai.propertyDetails || {}
-                    playerHouse.ai.propertyDetails[key] = Math.round(parseFloat(playerHouse.ai.propertyDetails[key] || 0)) + amount
-                    this.normalizeHousePropertyDetails(playerHouse)
+                  this.normalizeHousePropertyDetails(fromHouse)
+                  if (toHouse) {
+                    toHouse.ai = toHouse.ai || {}
+                    toHouse.ai.propertyDetails = toHouse.ai.propertyDetails || {}
+                    toHouse.ai.propertyDetails[key] = Math.round(parseFloat(toHouse.ai.propertyDetails[key] || 0)) + amount
+                    this.normalizeHousePropertyDetails(toHouse)
                   }
                   let types = this.vanillaPropertyTypes ? this.vanillaPropertyTypes() : {}
                   return Math.round(((types[key] && types[key].value) || 0) * amount)
@@ -1643,19 +1649,22 @@
                       keptCaptives.push(captive)
                     })
                     society.captives = keptCaptives
-                    // NPC-vs-NPC land feud flavour (bounded).
+                    // NPC-vs-NPC property feud (bounded): the stronger house really takes one holding
+                    // (wealth alone would be recomputed from cash + property on the next house turn),
+                    // and the two houses fall out. Never involves the player's house.
                     if (Math.random() < 0.25) {
-                      let houses = this.sortedHouses(society).filter((h) => h && !h.isPlayerHouse)
+                      let houses = this.sortedHouses(society).filter((h) => h && !h.isPlayerHouse && !this.isPlayerHouseRecord(h, state))
                       if (houses.length >= 2) {
                         let aggressor = houses[this.randomInt(0, Math.min(4, houses.length - 1))]
                         let victim = this.pick(houses.filter((h) => String(h.id) !== String(aggressor.id)))
-                        if (aggressor && victim && (aggressor.power || 0) > (victim.power || 0)) {
-                          let seized = Math.max(15, Math.round((victim.wealth || 150) * 0.08))
-                          victim.wealth = Math.max(0, Math.round((victim.wealth || 0) - seized))
-                          aggressor.wealth = (aggressor.wealth || 0) + Math.round(seized * 0.6)
-                          victim.relation = this.clamp((victim.relation || 0), -100, 100)
-                          this.log(society, aggressor.name + ' seizes ' + this.romanPlace('estate') + ' from ' + victim.name + ' in a property feud.', 'rivalry', victim.id)
-                          changed = true
+                        let holdings = victim ? this.housePropertyOptions(victim) : []
+                        if (aggressor && victim && holdings.length && (aggressor.power || 0) > (victim.power || 0)) {
+                          let holding = this.pick(holdings)
+                          if (this.transferPropertyBetweenHouses(victim, aggressor, holding.key, 1)) {
+                            this.changeHouseRelation(society, aggressor.id, victim.id, -this.randomInt(10, 20))
+                            this.log(society, aggressor.name + ' seizes ' + (holding.title || 'property') + ' at ' + this.romanPlace('estate') + ' from ' + victim.name + ' in a property feud.', 'rivalry', victim.id)
+                            changed = true
+                          }
                         }
                       }
                     }

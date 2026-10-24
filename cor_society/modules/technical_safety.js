@@ -14,7 +14,7 @@
       let previousDebugSectionOptions = window.corSociety.debugSectionOptions
       Object.assign(window.corSociety, {
         currentSchemaVersion() {
-          return 3
+          return 4
         },
         runSocietyMigrations(society, state) {
           if (!society || typeof society !== 'object') {
@@ -54,6 +54,11 @@
             if (this.repairCharacterDynastyPointers) this.repairCharacterDynastyPointers(society, gameState)
             society.schemaVersion = 3
             current = 3
+          }
+          if (current < 4 && gameState) {
+            if (this.repairInflatedHouses) this.repairInflatedHouses(society, gameState)
+            society.schemaVersion = 4
+            current = 4
           }
           if (gameState && society.schemaVersion < target) {
             society.schemaVersion = target
