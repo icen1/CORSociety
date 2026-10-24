@@ -64,7 +64,70 @@
               console.warn(err)
             }
           })
-          return changed
+          return changed + this.nameGensWomen(state)
+        },
+        gensFeminine(name) {
+          // The game's feminine form of a nomen or cognomen (module 0013): 'Tullius' -> 'Tullia', but
+          // 'Cicero' -> 'Cica'.
+          let e = String(name || '')
+          return e ? (e.substr(0, e.lastIndexOf('ic')) || e.substr(0, e.lastIndexOf('i')) || e.substr(0, e.lastIndexOf('u')) || e.substr(0, e.lastIndexOf('a')) || e) + (e.lastIndexOf('ic') > -1 ? 'ica' : 'ia') : ''
+        },
+        isGensWoman(character, state) {
+          // A living woman of the player's dynasty. The game's full name (module c896) treats anyone who
+          // is neither male nor of another gender as a woman.
+          if (!character || character.isDead) {
+            return false
+          }
+          let male = character.gender ? character.gender === 'male' : !!character.isMale
+          let other = !!character.gender && character.gender !== 'male' && character.gender !== 'female'
+          return !male && !other && String(character.dynastyId || '') === String(this.currentCharacterDynastyId(state) || '')
+        },
+        gensWomanName(character, state, cognomen) {
+          // A woman's full name as the game builds it (module c896): feminine nomen, feminine cognomen,
+          // agnomen, praenomen. With no cognomen of her own she is 'Tullia Tertia'.
+          let dynasty = (state.dynasties && state.dynasties[character.dynastyId]) || {}
+          let own = cognomen === undefined ? (character.cognomen || '') : cognomen
+          let agnomen = character.agnomen || character.honorific
+          return (this.gensFeminine(dynasty.nomen || '') + (own ? ' ' + this.gensFeminine(own) : '') + (agnomen ? ' "' + agnomen + '"' : '') + ' ' + (character.praenomen || '')).trim()
+        },
+        nameGensWomen(state) {
+          // Monthly and on load. Women of the Republic had no cognomen (Cicero's daughter was simply
+          // Tullia), and the game's feminine form mangles some ('Cicero' -> 'Cica'). Every woman of the
+          // player's gens gets an empty cognomen of her own, which the game shows as nothing.
+          state = state || daapi.getState()
+          if (!state || !state.characters) {
+            return 0
+          }
+          let named = 0
+          Object.keys(state.characters).forEach((characterId) => {
+            let character = state.characters[characterId]
+            if (!this.isGensWoman(character, state) || character.cognomen !== undefined) {
+              return
+            }
+            try {
+              daapi.updateCharacter({ characterId, character: { cognomen: '' } })
+              character.cognomen = ''
+              named += 1
+            } catch (err) {
+              console.warn(err)
+            }
+          })
+          return named
+        },
+        nameGensWomenInText(state, text) {
+          // A girl born into the gens is named in her birth notice and notification before she has her
+          // empty cognomen ('Tullia Cica Secunda'). She gets it here, and the text names her as she now is.
+          if (typeof text !== 'string' || text.indexOf('[c|') < 0) {
+            return text
+          }
+          return text.replace(/\[c\|([^|\]]+)\|([^\]]*)\]/g, (match, characterId, name) => {
+            let character = state.characters && state.characters[characterId]
+            if (!this.isGensWoman(character, state) || character.cognomen || name !== this.gensWomanName(character, state, (state.dynasties[character.dynastyId] || {}).cognomen || '')) {
+              return match
+            }
+            character.cognomen = ''
+            return '[c|' + characterId + '|' + this.gensWomanName(character, state) + ']'
+          })
         },
         inheritanceShareReachable(state, heirId) {
           // The game's share calculator (module 6b82) walks down from the player through children who
@@ -160,6 +223,24 @@
             }
             guarded.__corSocietyFamilyGuard = true
             marriage[0] = guarded
+          }
+          if (typeof store.subscribeAction === 'function' && !store.__corSocietyFamilyNames) {
+            // Birth notices and notifications name a girl of the gens before she has her empty cognomen.
+            store.__corSocietyFamilyNames = true
+            store.subscribeAction({
+              before: (action) => {
+                try {
+                  let type = String((action && action.type) || '').split('/').pop()
+                  let payload = action && action.payload
+                  let key = type === 'addCharacterNotification' ? 'title' : (type === 'pushInteractionModalQueue' || type === 'pushInteractionModalButtonQueue') ? 'message' : ''
+                  if (key && payload && typeof payload[key] === 'string') {
+                    payload[key] = current().nameGensWomenInText(store.state, payload[key])
+                  }
+                } catch (err) {
+                  // never block a game action
+                }
+              }
+            })
           }
           this.installMarriageScreenChoices(root)
           return true
