@@ -557,11 +557,16 @@
                     return false
                   }
                   if (daapi.getState.__corSocietySnapshot) {
+                    // already wrapped (a new boot in the same session): share the task cache it uses
+                    this._stateSnapshotHolder = daapi.getState.__corSocietyHolder || this._stateSnapshotHolder
                     return true
                   }
                   let holder = { value: null }
                   this._stateSnapshotHolder = holder
-                  let self = this
+                  // The wrappers outlive this object if window.corSociety is ever replaced (a new boot in
+                  // the same session): they work through whichever object is current when they run.
+                  let installer = this
+                  let current = () => (typeof window !== 'undefined' && window.corSociety) || installer
                   let original = daapi.getState
                   let reads = { getState: true, getCharacter: true, getDynasty: true, getGlobalFlag: true, getCharacterFlag: true, requireImage: true, getCharacterIcon: true, getPetIcon: true, getJobsForCharacter: true }
                   // Modal / UI-only calls change nothing the mod reads back, and the bundled translator
@@ -576,6 +581,7 @@
                     // features object, a debug snapshot) is replaced by a plain copy. The Society flag
                     // is the exception, too big to walk on every save; nothing may store a view there.
                     let wrapped = function() {
+                      let self = current()
                       let society = key === 'setGlobalFlag' && arguments[0] && arguments[0].flag === self.flag
                       let args = !society && self.detachStateViews ? Array.prototype.map.call(arguments, (arg) => self.detachStateViews(arg)) : arguments
                       // A write that would change nothing never reaches the game (see isNoOpDaapiWrite).
@@ -612,6 +618,7 @@
                   if (typeof daapi.forceUpdateCharacterDisplay === 'function') {
                     let redraw = daapi.forceUpdateCharacterDisplay
                     let wrappedRedraw = function() {
+                      let self = current()
                       self._daapiWriteDepth = (self._daapiWriteDepth || 0) + 1
                       try {
                         return redraw.apply(this, arguments)
@@ -626,6 +633,7 @@
                   }
                   let clock = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now())
                   let take = (target, args) => {
+                    let self = current()
                     let live = !(typeof window !== 'undefined' && window.corSocietyDisableLiveState) && self.liveGameState()
                     if (live) {
                       return self.stateView(live)
@@ -652,6 +660,7 @@
                     return holder.value
                   }
                   snapshot.__corSocietySnapshot = true
+                  snapshot.__corSocietyHolder = holder
                   daapi.getState = snapshot
                   return true
                 },
@@ -678,9 +687,13 @@
                   if (entry[0].__corSocietyCoalescer) {
                     return true
                   }
-                  let self = this
+                  // The wrappers outlive this object if window.corSociety is ever replaced (a new boot in
+                  // the same session): they work through whichever object is current when they run.
+                  let installer = this
+                  let current = () => (typeof window !== 'undefined' && window.corSociety) || installer
                   let original = entry[0]
                   let coalesced = function(characterId) {
+                    let self = current()
                     if (!(self._daapiWriteDepth > 0) || (typeof window !== 'undefined' && window.corSocietyDisableRefreshCoalescing)) {
                       return original.apply(this, arguments)
                     }
