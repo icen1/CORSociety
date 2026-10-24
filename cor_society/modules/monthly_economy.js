@@ -33,7 +33,7 @@
                   this.installDebtSaleModalPatch()
                   let monthKey = this.monthKey(state)
                   // A processed month only runs again to finish what a save made mid-month left
-                  // undone: the game autosaves right after the mod's first slice.
+                  // undone: the game autosaves as soon as its month step ends, before the first slice.
                   let progress = society.monthlyProgress
                   let resumeFrom = 0
                   if (society.lastProcessedMonth === monthKey) {
@@ -147,8 +147,8 @@
                   // Anything that reads Society state first completes the pending month
                   // (flushPendingMonthlyWork from monthlyTick, runAction and ensure).
                   // society.monthlyProgress records how many steps have started, so a save made
-                  // mid-month (the game autosaves right after the first slice) resumes after the last
-                  // step that started; a step that crashed the game is not run again.
+                  // mid-month (the game autosaves as soon as its month step ends, and every 15 s) resumes
+                  // after the last step that started; a step that crashed the game is not run again.
                   this.flushPendingMonthlyWork()
                   let progress = society.monthlyProgress
                   let from = Math.max(0, parseInt(resumeFrom, 10) || 0)
