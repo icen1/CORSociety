@@ -137,9 +137,11 @@
         runMonthlyQueue(society, queue, resumeFrom) {
                   // Mod code must run on the game's main thread (the game hard-wires DAAPI events there),
                   // so instead of one long block the month runs in slices with a setTimeout in between:
-                  // clicks, pause and the game's own worker results get handled meanwhile. Each slice
-                  // needs a fresh getState() copy (the snapshot cache is per task), so slices are ~120 ms:
-                  // a little more total work than one block, with a much shorter longest freeze.
+                  // clicks, pause and the game's own worker results get handled meanwhile. The first slice
+                  // waits for a timer too, so the game's own month step (its worker post, this mod list and
+                  // its autosave) ends without the month's work. Slices are ~16 ms (reading the state costs
+                  // nothing now that getState() is a live view), and the game's character rebuilds are held
+                  // until the month is done (holdCoalescedRefreshes): one rebuild for the whole month.
                   // Tune in-game with window.corSocietyMonthlySliceMs; disable with
                   // window.corSocietyDisableMonthlySlicing = true.
                   // Anything that reads Society state first completes the pending month
@@ -161,6 +163,9 @@
                     progress.total = queue.length
                   }
                   let job = { society, queue, index: from, done: false }
+                  if (this.holdCoalescedRefreshes) {
+                    this.holdCoalescedRefreshes(true)
+                  }
                   let canSlice = typeof window !== 'undefined' && typeof window.setTimeout === 'function' && !window.corSocietyDisableMonthlySlicing
                   if (!canSlice) {
                     this.runMonthlySteps(job, Infinity)
@@ -171,12 +176,12 @@
                     if (this._pendingMonthly !== job) {
                       return
                     }
-                    this.runMonthlySteps(job, Math.max(1, parseFloat(window.corSocietyMonthlySliceMs) || 120))
+                    this.runMonthlySteps(job, Math.max(1, parseFloat(window.corSocietyMonthlySliceMs) || 16))
                     if (!job.done) {
                       window.setTimeout(pump, 0)
                     }
                   }
-                  pump()
+                  window.setTimeout(pump, 0)
                 },
         runMonthlySteps(job, budgetMs) {
                   if (!this.monthlyJobIsCurrent(job)) {
@@ -185,6 +190,9 @@
                     job.done = true
                     if (this._pendingMonthly === job) {
                       this._pendingMonthly = null
+                    }
+                    if (this.holdCoalescedRefreshes) {
+                      this.holdCoalescedRefreshes(false)
                     }
                     return
                   }
@@ -197,6 +205,7 @@
                       job.society.monthlyProgress.done = job.index
                     }
                     this._runningMonthlyStep = true
+                    let stepStarted = clock()
                     try {
                       item.fn()
                     } catch (err) {
@@ -206,6 +215,9 @@
                       }
                     } finally {
                       this._runningMonthlyStep = false
+                      if (this.perfTime) {
+                        this.perfTime('monthStep:' + (item.name || 'refresh'), clock() - stepStarted)
+                      }
                     }
                     if (clock() - started >= budgetMs) {
                       break
@@ -215,6 +227,9 @@
                     job.done = true
                     if (this._pendingMonthly === job) {
                       this._pendingMonthly = null
+                    }
+                    if (this.holdCoalescedRefreshes) {
+                      this.holdCoalescedRefreshes(false)
                     }
                     delete job.society.monthlyProgress
                     this.save(job.society)
