@@ -573,8 +573,21 @@
                     // Society, too big to walk on every save; nothing may store a view there.
                     let detach = key !== 'setGlobalFlag'
                     let wrapped = function() {
-                      holder.value = null
                       let args = detach && self.detachStateViews ? Array.prototype.map.call(arguments, (arg) => self.detachStateViews(arg)) : arguments
+                      // A write that would change nothing never reaches the game (see isNoOpDaapiWrite).
+                      if (!(typeof window !== 'undefined' && window.corSocietyDisableNoopFilter) && self.isNoOpDaapiWrite) {
+                        let live = self.liveGameState()
+                        if (live && self.isNoOpDaapiWrite(key, args[0], live)) {
+                          if (self.perfCount) {
+                            self.perfCount('daapiWriteSkipped')
+                          }
+                          return key === 'updateCharacter' ? self.plainCopy(live.characters[args[0].characterId]) : undefined
+                        }
+                      }
+                      if (self.perfCount) {
+                        self.perfCount('daapiWrite')
+                      }
+                      holder.value = null
                       try {
                         return fn.apply(this, args)
                       } finally {
@@ -743,6 +756,68 @@
                     return view
                   }
                   return viewOf(target)
+                },
+        isNoOpDaapiWrite(name, args, live) {
+                  // True when a daapi write would leave the live game state as it is. The game rebuilds its
+                  // whole `characters` object and re-renders for every character write (forceUpdateCharacter),
+                  // so a write that changes nothing is pure cost. Only writes whose effect is fully known are
+                  // judged, and only for a character that exists; anything else is left to the game. Traits are
+                  // left alone: adding a trait the character has adds a stack, and neither call rebuilds when
+                  // it changes nothing.
+                  let character = args && live && live.characters && live.characters[args.characterId]
+                  if (!character || typeof character !== 'object') {
+                    return false
+                  }
+                  let isObject = (value) => !!value && typeof value === 'object' && !Array.isArray(value)
+                  // deep equality, where a key holding undefined is the same as a missing key
+                  let same = (a, b) => {
+                    if (a === b) {
+                      return true
+                    }
+                    if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) {
+                      return false
+                    }
+                    if (Array.isArray(a)) {
+                      return a.length === b.length && a.every((value, i) => same(value, b[i]))
+                    }
+                    let keys = Object.keys(a).filter((key) => a[key] !== undefined)
+                    let other = Object.keys(b).filter((key) => b[key] !== undefined)
+                    return keys.length === other.length && keys.every((key) => same(a[key], b[key]))
+                  }
+                  // the game's merge (updateCharacter): a nested object merges into a live object, anything
+                  // else replaces the live value
+                  let merged = (base, patch) => Object.keys(patch).every((key) => {
+                    if (isObject(patch[key]) && isObject(base[key])) {
+                      return merged(base[key], patch[key])
+                    }
+                    return patch[key] === undefined ? base[key] === undefined : same(base[key], patch[key])
+                  })
+                  let withoutFlag = (value) => {
+                    let copy = Object.assign({}, value)
+                    delete copy.isDAAPI
+                    return copy
+                  }
+                  let actions = character.actions || {}
+                  let statuses = character.statuses || {}
+                  if (name === 'updateCharacter') {
+                    return isObject(args.character) && merged(character, args.character)
+                  }
+                  if (name === 'addCharacterAction') {
+                    return !!actions[args.key] && isObject(args.action) && same(withoutFlag(actions[args.key]), withoutFlag(args.action))
+                  }
+                  if (name === 'deleteCharacterAction') {
+                    return !(args.key in actions)
+                  }
+                  if (name === 'addCharacterStatus') {
+                    return !!statuses[args.key] && isObject(args.status) && same(withoutFlag(statuses[args.key]), withoutFlag(args.status))
+                  }
+                  if (name === 'setCharacterStatusActive') {
+                    return !!statuses[args.key] && statuses[args.key].isActive === args.isActive
+                  }
+                  if (name === 'deleteCharacterStatus') {
+                    return !(args.key in statuses)
+                  }
+                  return false
                 },
         isStateView(value) {
                   return !!(value && typeof value === 'object' && this.STATE_VIEW && value[this.STATE_VIEW] === true)
