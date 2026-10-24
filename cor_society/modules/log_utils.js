@@ -25,8 +25,22 @@
                 },
         installDebugConsoleCommand() {
                   let self = this
+                  let perf = function() {
+                    // The profiler's one-line report (see diagnostics.perfReport), then a fresh start.
+                    let society = (typeof window !== 'undefined' && window.corSociety) || self
+                    let report = society.perfReport ? society.perfReport() : ''
+                    if (society.perfReset) {
+                      society.perfReset()
+                    }
+                    return report
+                  }
                   let command = function(section) {
                     section = section || 'overview'
+                    if (section === 'perf') {
+                      // No debug window and no saved snapshot: profiling must not grow the save.
+                      let society = (typeof window !== 'undefined' && window.corSociety) || self
+                      return society.perfReport ? society.perfReport() : ''
+                    }
                     let snapshot = false
                     try {
                       let society = false
@@ -67,7 +81,9 @@
                         'corSocietyDebug("log")',
                         'corSocietyDebug("houses")',
                         'corSocietyDebug("systems")',
-                        'corSocietyDebug("full")'
+                        'corSocietyDebug("full")',
+                        'corSocietyDebug("perf")',
+                        'corSocietyPerf()'
                       ],
                       note: 'The command opens the in-game debug window and stores the last snapshot in corSocietyLastDebugSnapshot.'
                     }
@@ -87,6 +103,7 @@
                       root.corSocietyDebug = command
                       root.CORSocietyDebug = command
                       root.corSocietyDebugHelp = help
+                      root.corSocietyPerf = perf
                     } catch (err) {
                       console.warn(err)
                     }
@@ -95,6 +112,7 @@
                     daapi.corSocietyDebug = command
                     daapi.CORSocietyDebug = command
                     daapi.corSocietyDebugHelp = help
+                    daapi.corSocietyPerf = perf
                   } catch (err) {
                     console.warn(err)
                   }
@@ -108,6 +126,7 @@
                         '  if (typeof daapi !== "undefined") return daapi.invokeMethod({event:"/cor_society/engine",method:"openDebugConsole",context:{section:section||"overview"}});',
                         '}',
                         'function CORSocietyDebug(section){ return corSocietyDebug(section); }',
+                        'function corSocietyPerf(){ return (typeof daapi !== "undefined" && daapi.corSocietyPerf) ? daapi.corSocietyPerf() : ""; }',
                         'function corSocietyDebugHelp(){ return (typeof daapi !== "undefined" && daapi.corSocietyDebugHelp) ? daapi.corSocietyDebugHelp() : "Use daapi.invokeMethod({ event: \\"/cor_society/engine\\", method: \\"openDebugConsole\\" })"; }'
                       ].join('\n')
                       document.documentElement.appendChild(script)
@@ -556,15 +575,25 @@
                     })
                     daapi[key] = wrapped
                   })
+                  let self = this
+                  let clock = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now())
+                  let copy = (target, args) => {
+                    let started = clock()
+                    let value = original.apply(target, args)
+                    if (self.perfTime) {
+                      self.perfTime('fullCopy', clock() - started)
+                    }
+                    return value
+                  }
                   let snapshot = function() {
                     if (typeof window !== 'undefined' && window.corSocietyDisableSnapshotCache) {
                       holder.value = null
-                      return original.apply(this, arguments)
+                      return copy(this, arguments)
                     }
                     if (holder.value) {
                       return holder.value
                     }
-                    holder.value = original.apply(this, arguments)
+                    holder.value = copy(this, arguments)
                     Promise.resolve().then(() => {
                       holder.value = null
                     })

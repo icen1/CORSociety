@@ -219,6 +219,9 @@
                     delete job.society.monthlyProgress
                     this.save(job.society)
                   }
+                  if (this.perfTime) {
+                    this.perfTime('monthSlice', clock() - started)
+                  }
                 },
         monthlyJobIsCurrent(job) {
                   // Global flags are kept by reference, so the job's Society object is the live flag
