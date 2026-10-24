@@ -14,7 +14,7 @@
       let previousDebugSectionOptions = window.corSociety.debugSectionOptions
       Object.assign(window.corSociety, {
         currentSchemaVersion() {
-          return 6
+          return 7
         },
         runSocietyMigrations(society, state) {
           if (!society || typeof society !== 'object') {
@@ -69,6 +69,11 @@
             if (this.foldBackInventedCadets) this.foldBackInventedCadets(society, gameState)
             society.schemaVersion = 6
             current = 6
+          }
+          if (current < 7 && current >= 6) {
+            if (this.wipeUnwarnedLudiAmbitus) this.wipeUnwarnedLudiAmbitus(society)
+            society.schemaVersion = 7
+            current = 7
           }
           if (gameState && society.schemaVersion < target) {
             society.schemaVersion = target

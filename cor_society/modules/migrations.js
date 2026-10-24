@@ -186,6 +186,26 @@
           })
           this.dissolvePlayerDynastyCadets(society, state, houseIds, (name) => name + ' is folded back into your house: no real branch of your family founded it.')
           return houseIds.length
+        },
+        wipeUnwarnedLudiAmbitus(society) {
+          // Step 7. Ludi seats bought in the game's campaign were recorded as hidden ambitus before
+          // the campaign said so (warnCampaignTickets). The hidden records are wiped; exposed ones,
+          // trials and convictions stay.
+          let wiped = 0
+          Object.keys((society && society.crimes) || {}).forEach((characterId) => {
+            let list = society.crimes[characterId]
+            if (!Array.isArray(list)) {
+              return
+            }
+            let kept = list.filter((crime) => !(crime && crime.type === 'ambitus' && crime.source === 'election' && !crime.exposed))
+            wiped += list.length - kept.length
+            if (kept.length) {
+              society.crimes[characterId] = kept
+            } else {
+              delete society.crimes[characterId]
+            }
+          })
+          return wiped
         }
       })
       window.corSociety._mixinCorSocietyMigrationsVersion = '1.1.331'
