@@ -474,6 +474,36 @@
           // Replaced by the game's campaign (buying ludi seats is recorded as ambitus).
           this.openCursus()
         },
+        warnCampaignTickets(payload) {
+          // The game's campaign offers ludi seats for the voters (election/campaign/buyTickets). For a
+          // candidate of the player's household they are recorded as hidden ambitus
+          // (recordCampaignAmbitus), so the choices say so before the click.
+          let options = payload && Array.isArray(payload.options) ? payload.options : []
+          let state = null
+          let warned = 0
+          options.forEach((option) => {
+            let target = option && option.action
+            if (!target || target.event !== 'election/campaign/buyTickets' || (target.method !== 'buyTicketsCost' && target.method !== 'buyTicketsResult')) {
+              return
+            }
+            state = state || daapi.getState()
+            let characterId = target.context && target.context.characterId
+            let household = ((state.current && state.current.householdCharacterIds) || []).map(String)
+            if (!characterId || household.indexOf(String(characterId)) < 0) {
+              return
+            }
+            let def = this.crimeCatalog().ambitus
+            let character = (state.characters && state.characters[characterId]) || {}
+            let who = String(characterId) === String(this.currentCharacterId(state)) ? 'you' : '[c|' + characterId + '|' + (character.praenomen || 'the candidate') + ']'
+            let warning = 'Consequences: buying seats for the voters is ambitus. It is recorded against ' + who + ', and if it comes out a trial follows: if convicted, ' + def.jail + ' months in prison, a fine and no office for 3 years.'
+            if (String(option.tooltip || '').indexOf(warning) >= 0) {
+              return
+            }
+            option.tooltip = option.tooltip ? option.tooltip + '\n' + warning : warning
+            warned += 1
+          })
+          return warned
+        },
         recordCampaignAmbitus(context) {
           let state = daapi.getState()
           let characterId = context && context.characterId
@@ -488,10 +518,11 @@
           this.save(society)
           return true
         },
-        installPoliticsGuards() {
+        installPoliticsGuards(root) {
           // Option clicks go through the game's store action processInteractionModalAction, so the
-          // campaign's 'buy tickets' choice can be seen and recorded as ambitus.
-          let root = this.findGameVueRoot ? this.findGameVueRoot() : null
+          // campaign's 'buy tickets' choice can be seen and recorded as ambitus. The modals that offer
+          // it go through pushInteractionModalQueue, so their options can state the risk first.
+          root = root || (this.findGameVueRoot ? this.findGameVueRoot() : null)
           let store = root && root.$store
           if (!store || store.__corSocietyPoliticsGuard || typeof store.subscribeAction !== 'function') {
             return false
@@ -505,6 +536,9 @@
                 let target = option && option.action
                 if (type.split('/').pop() === 'processInteractionModalAction' && target && target.event === 'election/campaign/buyTickets' && target.method === 'buyTicketsResult' && window.corSociety && window.corSociety.recordCampaignAmbitus) {
                   window.corSociety.recordCampaignAmbitus(target.context)
+                }
+                if (type.split('/').pop() === 'pushInteractionModalQueue' && window.corSociety && window.corSociety.warnCampaignTickets) {
+                  window.corSociety.warnCampaignTickets(option)
                 }
               } catch (err) {
                 // never block a game action
